@@ -1,6 +1,5 @@
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
-import { UAVModel } from "../entities/UAVModel";
 import { FlightAttitude } from "../simulation/flight/FlightKinematics";
 import { GimbalTelemetry } from "../simulation/gimbal/GimbalController";
 import { Vector3D } from "../types";
@@ -15,12 +14,11 @@ export class CameraManager {
   private baseFov: number = 42;
   private zoomLevel: number = 1.0; // 1x to 8x
 
-  private readonly tempVec1 = new THREE.Vector3();
   private readonly tempVec2 = new THREE.Vector3();
 
   constructor(container: HTMLElement) {
     const aspect = container.clientWidth / (container.clientHeight || 1);
-    this.camera = new THREE.PerspectiveCamera(this.baseFov, aspect, 0.5, 50000);
+    this.camera = new THREE.PerspectiveCamera(this.baseFov, aspect, 0.1, 50000);
 
     // OrbitControls for TACTICAL_ORBIT mode
     this.controls = new OrbitControls(this.camera, container);
@@ -59,7 +57,6 @@ export class CameraManager {
   public update(
     uav1Pos: Vector3D,
     uav1Attitude: FlightAttitude,
-    uav1Model: UAVModel,
     uav2Pos: Vector3D,
     gimbalTelemetry: GimbalTelemetry
   ): void {
@@ -69,9 +66,8 @@ export class CameraManager {
     }
 
     if (this.mode === "POV") {
-      // 1. Position camera at the UAV 1 Gimbal Turret aperture
-      uav1Model.getWorldGimbalPosition(this.tempVec1);
-      this.camera.position.copy(this.tempVec1);
+      // 1. Position camera cleanly at UAV 1 flight position
+      this.camera.position.set(uav1Pos.x, uav1Pos.y, uav1Pos.z);
 
       // 2. Optical boresight orientation:
       // Total Azimuth = UAV heading (yaw) + Gimbal Azimuth
@@ -85,9 +81,9 @@ export class CameraManager {
       const forwardZ = -Math.cos(totalYaw) * Math.cos(totalPitch);
 
       this.tempVec2.set(
-        this.tempVec1.x + forwardX * 100,
-        this.tempVec1.y + forwardY * 100,
-        this.tempVec1.z + forwardZ * 100
+        uav1Pos.x + forwardX * 200,
+        uav1Pos.y + forwardY * 200,
+        uav1Pos.z + forwardZ * 200
       );
 
       this.camera.lookAt(this.tempVec2);

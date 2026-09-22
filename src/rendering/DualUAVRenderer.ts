@@ -65,8 +65,12 @@ export class DualUAVRenderer {
     uav2Pos: Vector3D,
     uav2Att: FlightAttitude,
     gimbalTelemetry: GimbalTelemetry,
-    dt: number
+    dt: number,
+    isPovMode: boolean = false
   ): void {
+    // In POV mode, hide UAV 1 so its own mesh never blocks or clips into the camera
+    this.uav1.group.visible = !isPovMode;
+
     // Update UAV 1 position and physical attitude
     this.uav1.setPositionAndAttitude(uav1Pos, uav1Att.pitch, uav1Att.yaw, uav1Att.roll);
     this.uav1.setGimbalOrientation(gimbalTelemetry.azimuth, gimbalTelemetry.elevation);
@@ -87,13 +91,28 @@ export class DualUAVRenderer {
       // Start: UAV 1 Gimbal Turret aperture
       const startPos = new THREE.Vector3();
       this.uav1.getWorldGimbalPosition(startPos);
-      array[0] = startPos.x;
-      array[1] = startPos.y;
-      array[2] = startPos.z;
+
+      const targetEndY = uav2Pos.y + 1.8;
+      const dx = uav2Pos.x - startPos.x;
+      const dy = targetEndY - startPos.y;
+      const dz = uav2Pos.z - startPos.z;
+      const dist = Math.hypot(dx, dy, dz);
+
+      // In POV mode, offset laser start 3m forward so it emerges cleanly without obstructing reticle
+      const offset = isPovMode ? 3.5 : 0.0;
+      if (dist > offset && dist > 1e-3) {
+        array[0] = startPos.x + (dx / dist) * offset;
+        array[1] = startPos.y + (dy / dist) * offset;
+        array[2] = startPos.z + (dz / dist) * offset;
+      } else {
+        array[0] = startPos.x;
+        array[1] = startPos.y;
+        array[2] = startPos.z;
+      }
 
       // End: UAV 2 Beacon Position
       array[3] = uav2Pos.x;
-      array[4] = uav2Pos.y + 1.8;
+      array[4] = targetEndY;
       array[5] = uav2Pos.z;
 
       posAttr.needsUpdate = true;

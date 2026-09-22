@@ -246,6 +246,8 @@ export class Simulator {
 
     const simState = this.engine.getState();
 
+    const isPov = this.cameraManager.getMode() === "POV";
+
     // Update 3D visual models
     this.dualUAVRenderer.update(
       this.uav1Pos,
@@ -253,7 +255,8 @@ export class Simulator {
       simState.target.position,
       this.uav2Att,
       this.currentGimbalTelemetry,
-      deltaRealS
+      deltaRealS,
+      isPov
     );
 
     this.atmosphereRenderer.update(deltaRealS);
@@ -262,7 +265,6 @@ export class Simulator {
     this.cameraManager.update(
       this.uav1Pos,
       this.uav1Att,
-      this.dualUAVRenderer.uav1,
       simState.target.position,
       this.currentGimbalTelemetry
     );
