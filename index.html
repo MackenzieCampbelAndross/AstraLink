@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
@@ -330,6 +330,10 @@
         color: var(--hud-cyan);
       }
 
+      .data-val.accent-red {
+        color: var(--hud-red);
+      }
+
       /* Signal Strength Bar */
       .signal-bar-container {
         width: 100%;
@@ -476,7 +480,7 @@
 
       <!-- Middle Telemetry Section -->
       <div class="middle-section">
-        <!-- Optical Sensor & Flight Telemetry Panel -->
+        <!-- Optical Sensor & Flight Telemetry Panel (Left Side) -->
         <div class="panel interactive">
           <div class="panel-title">
             <span>Electro-Optical Sensor</span>
@@ -544,6 +548,57 @@
           <div class="data-row">
             <span class="data-label">UAV 2 (Target) Motion:</span>
             <span id="val-uav2-motion" class="data-val accent-green">CIRCULAR</span>
+          </div>
+        </div>
+
+        <!-- Member 2 & Member 3 Security & Trust Panel (Right Side) -->
+        <div class="panel interactive">
+          <div class="panel-title">
+            <span>Security & Trust Pipeline</span>
+            <span id="val-backend-status" class="data-val accent-amber">OFFLINE (DEV MODE)</span>
+          </div>
+
+          <div class="data-row">
+            <span class="data-label">Member 2 Tracking Mode:</span>
+            <span id="val-sec-tracking-state" class="data-val accent-amber">SEARCH</span>
+          </div>
+          <div class="data-row">
+            <span class="data-label">Beacon FOV Visibility:</span>
+            <span id="val-sec-beacon-visible" class="data-val">VISIBLE</span>
+          </div>
+          <div class="data-row">
+            <span class="data-label">Tracking Confidence:</span>
+            <span id="val-sec-confidence" class="data-val">0%</span>
+          </div>
+          <div class="data-row">
+            <span class="data-label">Motion Consistency:</span>
+            <span id="val-sec-motion-consistency" class="data-val">VALID</span>
+          </div>
+
+          <div style="margin: 6px 0; border-top: 1px dashed rgba(255,255,255,0.15);"></div>
+
+          <div class="data-row">
+            <span class="data-label">Member 3 Trust State:</span>
+            <span id="val-sec-trust-state" class="data-val accent-amber">UNTRUSTED</span>
+          </div>
+          <div class="data-row">
+            <span class="data-label">Cryptographic Auth:</span>
+            <span id="val-sec-auth" class="data-val">DISCONNECTED</span>
+          </div>
+          <div class="data-row">
+            <span class="data-label">Transmission Gate:</span>
+            <span id="val-sec-authorization" class="data-val accent-amber">BLOCKED</span>
+          </div>
+          <div class="data-row">
+            <span class="data-label">Payload Transmission:</span>
+            <span id="val-sec-tx-allowed" class="data-val accent-red">NO (BLOCKED)</span>
+          </div>
+
+          <div style="margin: 6px 0; border-top: 1px dashed rgba(255,255,255,0.15);"></div>
+
+          <div class="data-row">
+            <span class="data-label">Gate Policy Reason:</span>
+            <span id="val-sec-reason" class="data-val" style="font-size: 9px;">BACKEND DISCONNECTED</span>
           </div>
         </div>
       </div>

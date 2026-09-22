@@ -1,4 +1,4 @@
-﻿import { CameraViewMode } from "./rendering/CameraManager";
+import { CameraViewMode } from "./rendering/CameraManager";
 import { FullTelemetrySnapshot, Simulator } from "./simulator";
 import { DEFAULT_CONFIG } from "./config";
 import { MotionType } from "./types";
@@ -28,6 +28,18 @@ window.addEventListener("DOMContentLoaded", () => {
   const valUav1Stats = document.getElementById("val-uav1-stats")!;
   const valUav2Motion = document.getElementById("val-uav2-motion")!;
   const valModeTag = document.getElementById("val-mode-tag")!;
+
+  // Member 2 & Member 3 Security Panel Elements
+  const valBackendStatus = document.getElementById("val-backend-status")!;
+  const valSecTrackingState = document.getElementById("val-sec-tracking-state")!;
+  const valSecBeaconVisible = document.getElementById("val-sec-beacon-visible")!;
+  const valSecConfidence = document.getElementById("val-sec-confidence")!;
+  const valSecMotionConsistency = document.getElementById("val-sec-motion-consistency")!;
+  const valSecTrustState = document.getElementById("val-sec-trust-state")!;
+  const valSecAuth = document.getElementById("val-sec-auth")!;
+  const valSecAuthorization = document.getElementById("val-sec-authorization")!;
+  const valSecTxAllowed = document.getElementById("val-sec-tx-allowed")!;
+  const valSecReason = document.getElementById("val-sec-reason")!;
 
   // Button elements
   const btnPlay = document.getElementById("btn-play") as HTMLButtonElement;
@@ -95,7 +107,6 @@ window.addEventListener("DOMContentLoaded", () => {
 
       signalBar.className = "signal-bar-fill locked";
 
-      // Position tracking box dead-center over the projected target aircraft
       if (ts.inFront) {
         targetBox.className = "";
         targetBox.classList.add("locked");
@@ -129,7 +140,6 @@ window.addEventListener("DOMContentLoaded", () => {
         targetBox.className = "hidden";
       }
     } else {
-      // SEARCHING
       badgeLock.textContent = "SEARCHING AIRSPACE";
       badgeLock.className = "badge badge-searching";
       valGimbalState.className = "data-val accent-amber";
@@ -142,9 +152,50 @@ window.addEventListener("DOMContentLoaded", () => {
       valOpticalLink.className = "data-val accent-amber";
 
       signalBar.className = "signal-bar-fill";
-
-      // In searching mode, hide target box until beacon is intercepted
       targetBox.className = "hidden";
+    }
+
+    // 3. Update Member 2 & Member 3 Security Panel HUD
+    if (s.bridgeConnected && s.bridgeTelemetry) {
+      const bt = s.bridgeTelemetry;
+      valBackendStatus.textContent = "ONLINE (WS 8765)";
+      valBackendStatus.className = "data-val accent-green";
+
+      valSecTrackingState.textContent = bt.tracking_state.mode.toUpperCase();
+      valSecTrackingState.className = bt.tracking_state.mode.toUpperCase() === "LOCKED" ? "data-val accent-green" : "data-val accent-amber";
+
+      valSecBeaconVisible.textContent = ts.inFov ? "VISIBLE (FOV)" : "OUT OF FOV";
+      valSecConfidence.textContent = `${(bt.tracking_state.confidence * 100).toFixed(0)}%`;
+      valSecMotionConsistency.textContent = bt.tracking_state.motion_consistency ? "PASSED (0.95)" : "FAIL (0.00)";
+      valSecMotionConsistency.className = bt.tracking_state.motion_consistency ? "data-val accent-green" : "data-val accent-red";
+
+      valSecTrustState.textContent = bt.security_state.state;
+      valSecTrustState.className = bt.security_state.state === "AUTHORIZED" ? "data-val accent-green" : "data-val accent-amber";
+
+      valSecAuth.textContent = bt.security_state.authentication_valid ? "AUTHENTICATED (Ed25519)" : "UNAUTHENTICATED";
+      valSecAuth.className = bt.security_state.authentication_valid ? "data-val accent-green" : "data-val accent-red";
+
+      valSecAuthorization.textContent = bt.security_state.trust_authorized ? "AUTHORIZED" : "UNTRUSTED";
+      valSecAuthorization.className = bt.security_state.trust_authorized ? "data-val accent-green" : "data-val accent-red";
+
+      valSecTxAllowed.textContent = bt.security_state.transmission_allowed ? "YES (PERMITTED)" : "NO (BLOCKED)";
+      valSecTxAllowed.className = bt.security_state.transmission_allowed ? "data-val accent-green" : "data-val accent-red";
+
+      valSecReason.textContent = bt.security_state.reason;
+    } else {
+      valBackendStatus.textContent = "DISCONNECTED (DEV MODE)";
+      valBackendStatus.className = "data-val accent-amber";
+
+      valSecTrackingState.textContent = g.state;
+      valSecBeaconVisible.textContent = ts.inFov ? "VISIBLE" : "HIDDEN";
+      valSecConfidence.textContent = g.state === "LOCKED" ? "95%" : "0%";
+      valSecMotionConsistency.textContent = "STANDBY";
+      valSecTrustState.textContent = "UNTRUSTED";
+      valSecAuth.textContent = "DISCONNECTED";
+      valSecAuthorization.textContent = "BLOCKED";
+      valSecTxAllowed.textContent = "NO (BLOCKED)";
+      valSecTxAllowed.className = "data-val accent-red";
+      valSecReason.textContent = "BACKEND DISCONNECTED (OFFLINE DEV MODE)";
     }
   }
 

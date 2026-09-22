@@ -1,4 +1,4 @@
-﻿import { Vector3D } from "../../types";
+import { Vector3D } from "../../types";
 
 export type GimbalState = "SEARCHING" | "ACQUIRING" | "LOCKED" | "LOST";
 
@@ -38,6 +38,12 @@ export class GimbalController {
     if (customDuration !== undefined) {
       this.searchDuration = customDuration;
     }
+  }
+
+  public applyCameraCommand(panDeg: number, tiltDeg: number): void {
+    // Convert pan/tilt degrees from Python CameraCommand to radians
+    this.currentAzimuth = (panDeg * Math.PI) / 180.0;
+    this.currentElevation = (tiltDeg * Math.PI) / 180.0;
   }
 
   public reset(): void {
@@ -208,7 +214,6 @@ export class GimbalController {
   }
 
   private randomizeDiscoveryTime(): void {
-    // 6.0 to 8.5 seconds
     this.searchDuration = 6.0 + Math.random() * 2.5;
   }
 }

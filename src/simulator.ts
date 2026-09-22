@@ -7,6 +7,7 @@ import { FlightAttitude, FlightKinematics, TransmitterFlightTrajectory } from ".
 import { GimbalController, GimbalTelemetry } from "./simulation/gimbal/GimbalController";
 import { SimulationEngine } from "./simulation/SimulationEngine";
 import { GroundTruth, MotionType, SimulationConfig, SimulationStateSnapshot, Vector3D } from "./types";
+import { PythonBridgeClient, BridgeTelemetryResponse } from "./bridge/PythonBridgeClient";
 
 export interface ScreenTargetProjection {
   x: number;
@@ -26,6 +27,8 @@ export interface FullTelemetrySnapshot {
   cameraMode: CameraViewMode;
   zoom: number;
   targetScreen: ScreenTargetProjection;
+  bridgeConnected: boolean;
+  bridgeTelemetry?: BridgeTelemetryResponse;
 }
 
 export interface SimulatorCallbacks {
@@ -44,6 +47,7 @@ export class Simulator {
   private readonly uav1Kinematics: FlightKinematics;
   private readonly uav2Kinematics: FlightKinematics;
   private readonly gimbal: GimbalController;
+  private readonly bridgeClient: PythonBridgeClient;
 
   private isRunning: boolean = true;
   private speedMultiplier: number = 1.0;
@@ -61,6 +65,9 @@ export class Simulator {
   private uav1Att: FlightAttitude = { pitch: 0, yaw: 0, roll: 0 };
   private uav2Att: FlightAttitude = { pitch: 0, yaw: 0, roll: 0 };
 
+  private bridgeConnected: boolean = false;
+  private latestBridgeTelemetry?: BridgeTelemetryResponse;
+
   constructor(container: HTMLElement, config: SimulationConfig, callbacks?: SimulatorCallbacks) {
     this.callbacks = callbacks ?? {};
 
@@ -73,7 +80,25 @@ export class Simulator {
     this.uav2Kinematics = new FlightKinematics();
     this.gimbal = new GimbalController();
 
-    // 3. Three.js Scene & Realistic Atmosphere
+    // 3. Python Telemetry Bridge Client
+    this.bridgeClient = new PythonBridgeClient("ws://127.0.0.1:8765", {
+      onStatusChange: (connected) => {
+        this.bridgeConnected = connected;
+      },
+      onTelemetryResponse: (response) => {
+        this.latestBridgeTelemetry = response;
+        if (response.camera_command) {
+          // Apply received CameraCommand directly into Gimbal Controller
+          this.gimbal.applyCameraCommand(
+            response.camera_command.pan_command,
+            response.camera_command.tilt_command
+          );
+        }
+      },
+    });
+    this.bridgeClient.connect();
+
+    // 4. Three.js Scene & Realistic Atmosphere
     this.sceneManager = new SceneManager(container);
     this.atmosphereRenderer = new AtmosphereRenderer(this.sceneManager.scene);
     this.dualUAVRenderer = new DualUAVRenderer(this.sceneManager.scene);
@@ -254,7 +279,6 @@ export class Simulator {
     }
 
     const simState = this.engine.getState();
-
     const isPov = this.cameraManager.getMode() === "POV";
 
     // Update 3D visual models
@@ -284,14 +308,28 @@ export class Simulator {
       this.cameraManager.camera
     );
 
-    // Project target beacon onto screen coordinates
+    // Project target beacon onto 2D viewport coordinates
     const targetScreen = this.cameraManager.projectToScreen(
       simState.beacon.worldPosition,
       window.innerWidth,
       window.innerHeight
     );
 
-    // Notify UI
+    // Stream real DetectionResult telemetry payload to Python Bridge
+    if (this.bridgeClient.isConnected()) {
+      const isVisible = targetScreen.inFov && simState.beacon.enabled;
+      this.bridgeClient.sendDetection({
+        type: "detection_telemetry",
+        timestamp: simState.time.time,
+        frame_id: simState.time.frameId,
+        centroid_x: isVisible ? targetScreen.x : null,
+        centroid_y: isVisible ? targetScreen.y : null,
+        confidence: isVisible ? 0.95 : 0.0,
+        visible: isVisible,
+      });
+    }
+
+    // Notify UI Callbacks
     if (this.callbacks.onTelemetryUpdate) {
       this.callbacks.onTelemetryUpdate({
         simState,
@@ -302,7 +340,9 @@ export class Simulator {
         fps: this.fps,
         cameraMode: this.cameraManager.getMode(),
         zoom: this.cameraManager.getZoom(),
-        targetScreen
+        targetScreen,
+        bridgeConnected: this.bridgeConnected,
+        bridgeTelemetry: this.latestBridgeTelemetry,
       });
     }
   }
@@ -311,6 +351,7 @@ export class Simulator {
     if (this.animationFrameId !== undefined) {
       cancelAnimationFrame(this.animationFrameId);
     }
+    this.bridgeClient.disconnect();
     this.sceneManager.dispose();
   }
 }
