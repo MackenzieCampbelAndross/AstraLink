@@ -4,15 +4,18 @@ export type GimbalState = "SEARCHING" | "ACQUIRING" | "LOCKED" | "LOST";
 
 export interface GimbalTelemetry {
   state: GimbalState;
-  azimuth: number;       // Current gimbal azimuth in radians
-  elevation: number;     // Current gimbal elevation in radians
-  targetAzimuth: number; // True azimuth to beacon in radians
-  targetElevation: number; // True elevation to beacon in radians
-  trackingErrorMrad: number; // Pointing error in milliradians
-  range: number;         // Distance to target in meters
-  lockDuration: number;  // Seconds locked
+  azimuth: number;          // Current gimbal azimuth in radians
+  elevation: number;        // Current gimbal elevation in radians
+  targetAzimuth: number;    // True azimuth to beacon in radians
+  targetElevation: number;  // True elevation to beacon in radians
+  trackingErrorMrad: number;// Pointing error in milliradians
+  range: number;            // Distance to target in meters
+  lockDuration: number;     // Seconds locked
   searchCoord: { x: number; y: number }; // Normalized [-1, 1] coordinate on camera HUD
   opticalLinkActive: boolean;
+  searchTime: number;       // Current time spent searching in seconds
+  searchDuration: number;   // Target discovery time (approx 5-10s)
+  currentSector: string;    // Active search sector label
 }
 
 export class GimbalController {
@@ -21,16 +24,35 @@ export class GimbalController {
   private currentElevation = 0; // radians relative to aircraft pitch
 
   private searchTime = 0;
+  private searchDuration = 7.0; // 5 - 10 seconds to discover beacon
   private acquireTimer = 0;
   private lockDuration = 0;
 
+  private currentSectorIndex = 0;
+  private waypointTimer = 0;
+
   // Mechanical specs
-  private readonly maxSlewRate = (50 * Math.PI) / 180; // 50 deg/sec
-  private readonly searchFov = (24 * Math.PI) / 180;   // 24 deg FOV for acquisition
+  private readonly maxSlewRate = (45 * Math.PI) / 180; // 45 deg/sec
+  private readonly searchFov = (18 * Math.PI) / 180;   // 18 deg FOV for acquisition
   private readonly lockThreshold = (0.5 * Math.PI) / 180; // 0.5 deg (8.7 mrad) lock threshold
 
-  constructor() {
+  // Systematic pseudo-random search sectors across the airspace (azimuth, elevation)
+  private readonly searchSectors: Array<{ az: number; el: number; name: string }> = [
+    { az: -0.65, el: 0.18, name: "ALPHA-01 [LEFT HIGH]" },
+    { az: -0.20, el: -0.25, name: "BRAVO-02 [CENTER LOW]" },
+    { az: 0.60, el: 0.15, name: "CHARLIE-03 [RIGHT HIGH]" },
+    { az: 0.35, el: -0.18, name: "DELTA-04 [RIGHT LOW]" },
+    { az: -0.50, el: -0.05, name: "ECHO-05 [LEFT HORIZON]" },
+    { az: 0.10, el: 0.28, name: "FOXTROT-06 [ZENITH SWEEP]" },
+    { az: -0.30, el: 0.22, name: "GOLF-07 [LEFT APEX]" },
+    { az: 0.50, el: -0.10, name: "HOTEL-08 [RIGHT HORIZON]" }
+  ];
+
+  constructor(customDuration?: number) {
     this.reset();
+    if (customDuration !== undefined) {
+      this.searchDuration = customDuration;
+    }
   }
 
   public reset(): void {
@@ -40,17 +62,29 @@ export class GimbalController {
     this.searchTime = 0;
     this.acquireTimer = 0;
     this.lockDuration = 0;
+    this.currentSectorIndex = 0;
+    this.waypointTimer = 0;
+    // Set a realistic randomized discovery time between 6.0 and 8.5 seconds
+    this.randomizeDiscoveryTime();
+  }
+
+  public setSearchDuration(seconds: number): void {
+    this.searchDuration = Math.max(1.0, seconds);
   }
 
   public breakLock(): void {
     this.state = "SEARCHING";
+    this.searchTime = 0;
     this.acquireTimer = 0;
     this.lockDuration = 0;
+    this.randomizeDiscoveryTime();
+    // Start search away from current lock position
+    this.currentSectorIndex = (this.currentSectorIndex + 2) % this.searchSectors.length;
+    this.waypointTimer = 0;
   }
 
   public forceSearch(): void {
     this.breakLock();
-    this.searchTime = 0;
   }
 
   public forceLock(targetAz: number, targetEl: number): void {
@@ -85,40 +119,73 @@ export class GimbalController {
 
     let targetEl = worldElevation - uavPitch;
 
-    // Search pattern generation (Archimedean spiral)
     let searchCoord = { x: 0, y: 0 };
+    let activeSectorName = "SEARCHING AIRSPACE";
 
     if (this.state === "SEARCHING") {
       this.searchTime += dt;
+      this.waypointTimer += dt;
       this.lockDuration = 0;
 
-      // Expand spiral radius over a 6-second period, then repeat
-      const cycleTime = 6.0;
-      const progress = (this.searchTime % cycleTime) / cycleTime;
-      const spiralRadius = ((20 * Math.PI) / 180) * Math.sqrt(progress);
-      const spiralAngle = this.searchTime * 6.0; // spin frequency
+      // Phase 1: Wide pseudo-random ordered search across the sky
+      if (this.searchTime < this.searchDuration) {
+        // Move between search sectors every 1.2 to 1.6 seconds
+        const sectorDuration = 1.35;
+        if (this.waypointTimer >= sectorDuration) {
+          this.waypointTimer = 0;
+          this.currentSectorIndex = (this.currentSectorIndex + 1) % this.searchSectors.length;
+        }
 
-      const scanAzOffset = spiralRadius * Math.cos(spiralAngle);
-      const scanElOffset = spiralRadius * Math.sin(spiralAngle) * 0.75;
+        const sector = this.searchSectors[this.currentSectorIndex];
+        activeSectorName = sector.name;
 
-      // Approximate scan point towards the sector
-      this.currentAzimuth += (targetAz + scanAzOffset - this.currentAzimuth) * Math.min(1.0, 4.0 * dt);
-      this.currentElevation += (targetEl + scanElOffset - this.currentElevation) * Math.min(1.0, 4.0 * dt);
+        // Smoothly steer gimbal towards current search sector
+        const azDiff = sector.az - this.currentAzimuth;
+        const elDiff = sector.el - this.currentElevation;
+        const panRate = Math.min(1.0, 3.5 * dt);
+        this.currentAzimuth += azDiff * panRate;
+        this.currentElevation += elDiff * panRate;
 
-      // Normalized coordinates on HUD
-      searchCoord = {
-        x: Math.cos(spiralAngle) * progress,
-        y: Math.sin(spiralAngle) * progress
-      };
+        // Realistic sensor micro-dither / sweep motion
+        const ditherPhase = this.searchTime * 12.0;
+        const ditherAz = Math.sin(ditherPhase) * 0.015;
+        const ditherEl = Math.cos(ditherPhase * 0.7) * 0.012;
 
-      // Check if target is inside camera acquisition cone
-      const error = Math.hypot(this.currentAzimuth - targetAz, this.currentElevation - targetEl);
-      if (error < this.searchFov) {
-        this.state = "ACQUIRING";
-        this.acquireTimer = 0;
+        this.currentAzimuth += ditherAz;
+        this.currentElevation += ditherEl;
+
+        // HUD search scan coordinate
+        searchCoord = {
+          x: Math.sin(this.searchTime * 4.0) * 0.75,
+          y: Math.cos(this.searchTime * 3.2) * 0.65
+        };
+      } else {
+        // Phase 2: After 5-10s of systematic sweeping, the search sweeps into the target sector!
+        activeSectorName = "TARGET SECTOR [INTERCEPT]";
+        const azDiff = targetAz - this.currentAzimuth;
+        const elDiff = targetEl - this.currentElevation;
+
+        // Sweep toward target bearing
+        const interceptSpeed = Math.min(1.0, 4.5 * dt);
+        this.currentAzimuth += azDiff * interceptSpeed;
+        this.currentElevation += elDiff * interceptSpeed;
+
+        const error = Math.hypot(targetAz - this.currentAzimuth, targetEl - this.currentElevation);
+
+        // When target beacon enters camera field of view, transition to ACQUIRING
+        if (error < this.searchFov) {
+          this.state = "ACQUIRING";
+          this.acquireTimer = 0;
+        }
+
+        searchCoord = {
+          x: Math.min(1.0, Math.max(-1.0, azDiff / this.searchFov)),
+          y: Math.min(1.0, Math.max(-1.0, elDiff / this.searchFov))
+        };
       }
     } else if (this.state === "ACQUIRING") {
-      // Slew toward target at maximum slew rate
+      activeSectorName = "BEACON DETECTED [COARSE ALIGN]";
+      // Rapid slew to center optical beacon
       const errAz = targetAz - this.currentAzimuth;
       const errEl = targetEl - this.currentElevation;
       const totalErr = Math.hypot(errAz, errEl);
@@ -131,30 +198,30 @@ export class GimbalController {
       }
 
       searchCoord = {
-        x: (errAz / this.searchFov) * 0.8,
-        y: (errEl / this.searchFov) * 0.8
+        x: (errAz / this.searchFov) * 0.6,
+        y: (errEl / this.searchFov) * 0.6
       };
 
       if (totalErr <= this.lockThreshold) {
         this.acquireTimer += dt;
-        if (this.acquireTimer >= 0.25) {
+        if (this.acquireTimer >= 0.2) {
           this.state = "LOCKED";
         }
       } else {
-        this.acquireTimer = Math.max(0, this.acquireTimer - dt * 0.5);
+        this.acquireTimer = Math.max(0, this.acquireTimer - dt * 0.4);
       }
     } else if (this.state === "LOCKED") {
-      // Continuous fine tracking
+      activeSectorName = "CARRIER LOCKED [TRACKING]";
       this.lockDuration += dt;
-      const trackSpeed = Math.min(1.0, 20.0 * dt);
+
+      // Fine continuous optical lead tracking
+      const trackSpeed = Math.min(1.0, 22.0 * dt);
       this.currentAzimuth += (targetAz - this.currentAzimuth) * trackSpeed;
       this.currentElevation += (targetEl - this.currentElevation) * trackSpeed;
 
       const totalErr = Math.hypot(targetAz - this.currentAzimuth, targetEl - this.currentElevation);
-      // If error blows past threshold (e.g. radical maneuver)
       if (totalErr > this.searchFov * 1.5) {
-        this.state = "SEARCHING";
-        this.searchTime = 0;
+        this.breakLock();
       }
     }
 
@@ -171,11 +238,19 @@ export class GimbalController {
       range,
       lockDuration: this.lockDuration,
       searchCoord,
-      opticalLinkActive: this.state === "LOCKED"
+      opticalLinkActive: this.state === "LOCKED",
+      searchTime: this.searchTime,
+      searchDuration: this.searchDuration,
+      currentSector: activeSectorName
     };
   }
 
   public getState(): GimbalState {
     return this.state;
+  }
+
+  private randomizeDiscoveryTime(): void {
+    // Approx 5 to 9 seconds to find the target beacon
+    this.searchDuration = 6.0 + (Math.sin(this.searchTime * 17.3) * 0.5 + 0.5) * 3.0;
   }
 }

@@ -1,4 +1,4 @@
-import { CameraViewMode } from "./rendering/CameraManager";
+ï»¿import { CameraViewMode } from "./rendering/CameraManager";
 import { FullTelemetrySnapshot, Simulator } from "./simulator";
 import { DEFAULT_CONFIG } from "./config";
 import { MotionType } from "./types";
@@ -15,6 +15,8 @@ window.addEventListener("DOMContentLoaded", () => {
   const targetBoxLabel = document.getElementById("target-box-label")!;
 
   const valGimbalState = document.getElementById("val-gimbal-state")!;
+  const valSearchSector = document.getElementById("val-search-sector")!;
+  const valSearchTime = document.getElementById("val-search-time")!;
   const valLockDuration = document.getElementById("val-lock-duration")!;
   const valTrackingErr = document.getElementById("val-tracking-err")!;
   const valTargetRange = document.getElementById("val-target-range")!;
@@ -56,7 +58,7 @@ window.addEventListener("DOMContentLoaded", () => {
 
     const azDeg = (g.azimuth * 180 / Math.PI).toFixed(1);
     const elDeg = (g.elevation * 180 / Math.PI).toFixed(1);
-    valGimbalAngles.textContent = `${azDeg}° / ${elDeg}°`;
+    valGimbalAngles.textContent = `${azDeg}Â° / ${elDeg}Â°`;
 
     // UAV 1 Altitude & speed
     const alt = s.uav1Position.y.toFixed(0);
@@ -68,43 +70,54 @@ window.addEventListener("DOMContentLoaded", () => {
 
     // Heading Compass Tape
     let hdgDeg = Math.round((-s.uav1Attitude.yaw * 180 / Math.PI + 360) % 360);
-    compassDisplay.textContent = `HDG ${hdgDeg.toString().padStart(3, "0")}° | EL ${elDeg}°`;
+    compassDisplay.textContent = `HDG ${hdgDeg.toString().padStart(3, "0")}Â° | EL ${elDeg}Â°`;
 
-    // 2. Optical Link Status & Target Box Styling
+    // 2. Optical Link Status, Search Sector & Target Box Styling
     if (g.state === "LOCKED") {
       badgeLock.textContent = "BEACON LOCKED";
       badgeLock.className = "badge badge-locked";
       valGimbalState.className = "data-val accent-green";
+
+      valSearchSector.textContent = "CARRIER LOCKED [TRACKING]";
+      valSearchSector.className = "data-val accent-green";
+      valSearchTime.textContent = `LOCKED (${g.lockDuration.toFixed(1)}s)`;
 
       valOpticalLink.textContent = "OPTICAL LINK ACTIVE (10 Gbps)";
       valOpticalLink.className = "data-val accent-green";
 
       targetBox.className = "locked";
       targetBoxLabel.textContent = `LOCKED [${g.trackingErrorMrad.toFixed(1)} mrad]`;
-      // Center target box precisely on optical reticle
       targetBox.style.transform = `translate(-50%, -50%) translate(${g.searchCoord.x * 20}px, ${g.searchCoord.y * 20}px) scale(1.0)`;
     } else if (g.state === "ACQUIRING") {
       badgeLock.textContent = "ACQUIRING BEACON";
       badgeLock.className = "badge badge-searching";
       valGimbalState.className = "data-val accent-cyan";
 
+      valSearchSector.textContent = "INTERCEPT [COARSE ALIGN]";
+      valSearchSector.className = "data-val accent-cyan";
+      valSearchTime.textContent = "DETECTED";
+
       valOpticalLink.textContent = "COARSE ALIGNING...";
       valOpticalLink.className = "data-val accent-cyan";
 
       targetBox.className = "";
-      targetBoxLabel.textContent = "ACQUIRING";
-      targetBox.style.transform = `translate(-50%, -50%) translate(${g.searchCoord.x * 120}px, ${g.searchCoord.y * 120}px) scale(1.2)`;
+      targetBoxLabel.textContent = "ACQUIRING BEACON";
+      targetBox.style.transform = `translate(-50%, -50%) translate(${g.searchCoord.x * 100}px, ${g.searchCoord.y * 100}px) scale(1.2)`;
     } else {
-      badgeLock.textContent = "SEARCHING";
+      badgeLock.textContent = "SEARCHING AIRSPACE";
       badgeLock.className = "badge badge-searching";
       valGimbalState.className = "data-val accent-amber";
 
-      valOpticalLink.textContent = "SEARCHING UNCERTAINTY CONE";
+      valSearchSector.textContent = g.currentSector;
+      valSearchSector.className = "data-val accent-amber";
+      valSearchTime.textContent = `${g.searchTime.toFixed(1)}s / ${g.searchDuration.toFixed(1)}s`;
+
+      valOpticalLink.textContent = "SEARCHING SECTORS...";
       valOpticalLink.className = "data-val accent-amber";
 
       targetBox.className = "searching";
-      targetBoxLabel.textContent = "SCANNING";
-      targetBox.style.transform = `translate(-50%, -50%) translate(${g.searchCoord.x * 150}px, ${g.searchCoord.y * 150}px) scale(1.4)`;
+      targetBoxLabel.textContent = `SWEEP: ${g.currentSector.split(" ")[0]}`;
+      targetBox.style.transform = `translate(-50%, -50%) translate(${g.searchCoord.x * 160}px, ${g.searchCoord.y * 160}px) scale(1.35)`;
     }
   }
 

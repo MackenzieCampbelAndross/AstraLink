@@ -1,9 +1,9 @@
-<!DOCTYPE html>
+ï»¿<!DOCTYPE html>
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>ASTRA LINK — Transmitter Optical Camera POV & Dual UAV Simulation</title>
+    <title>ASTRA LINK â€” Transmitter Optical Camera POV & Dual UAV Simulation</title>
     <style>
       :root {
         --hud-cyan: #00f0ff;
@@ -251,7 +251,7 @@
         border-radius: 8px;
         padding: 12px 16px;
         backdrop-filter: blur(10px);
-        width: 300px;
+        width: 320px;
         box-shadow: 0 8px 30px rgba(0, 0, 0, 0.6);
       }
 
@@ -383,7 +383,7 @@
 
         <!-- Compass Ribbon -->
         <div class="compass-container interactive">
-          <div id="compass-display" class="compass-ribbon">HDG 240° | W | 255°</div>
+          <div id="compass-display" class="compass-ribbon">HDG 240Â° | W | 255Â°</div>
           <div class="compass-pointer"></div>
         </div>
 
@@ -421,6 +421,14 @@
             <span id="val-gimbal-state" class="data-val accent-amber">SEARCHING</span>
           </div>
           <div class="data-row">
+            <span class="data-label">Search Sector:</span>
+            <span id="val-search-sector" class="data-val accent-amber">ALPHA-01</span>
+          </div>
+          <div class="data-row">
+            <span class="data-label">Search Sweep:</span>
+            <span id="val-search-time" class="data-val">0.0s / 7.0s</span>
+          </div>
+          <div class="data-row">
             <span class="data-label">Lock Duration:</span>
             <span id="val-lock-duration" class="data-val">0.0 s</span>
           </div>
@@ -437,7 +445,7 @@
 
           <div class="data-row">
             <span class="data-label">Gimbal Az / El:</span>
-            <span id="val-gimbal-angles" class="data-val">0.0° / 0.0°</span>
+            <span id="val-gimbal-angles" class="data-val">0.0Â° / 0.0Â°</span>
           </div>
           <div class="data-row">
             <span class="data-label">Optical Link Beam:</span>
@@ -445,7 +453,7 @@
           </div>
           <div class="data-row">
             <span class="data-label">Optical Zoom:</span>
-            <span id="val-zoom" class="data-val accent-cyan">1.0x (FOV 42°)</span>
+            <span id="val-zoom" class="data-val accent-cyan">1.0x (FOV 42Â°)</span>
           </div>
 
           <div style="margin: 6px 0; border-top: 1px dashed rgba(255,255,255,0.15);"></div>
@@ -484,9 +492,9 @@
         <!-- Gimbal Actions -->
         <div class="btn-cluster">
           <span class="cluster-label">Gimbal:</span>
-          <button id="btn-force-search" class="btn-action-green">Search</button>
+          <button id="btn-force-search" class="btn-action-green">Search (5-10s)</button>
           <button id="btn-break-lock" class="btn-action-red">Break Lock</button>
-          <button id="btn-force-lock">Auto Lock</button>
+          <button id="btn-force-lock">Instant Lock</button>
         </div>
 
         <!-- Target Motion Selection -->

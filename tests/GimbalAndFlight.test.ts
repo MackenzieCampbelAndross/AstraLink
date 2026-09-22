@@ -1,22 +1,16 @@
-import { describe, expect, it } from "vitest";
+﻿import { describe, expect, it } from "vitest";
 import { FlightKinematics, TransmitterFlightTrajectory } from "../src/simulation/flight/FlightKinematics";
 import { GimbalController } from "../src/simulation/gimbal/GimbalController";
 
 describe("FlightKinematics", () => {
   it("computes coordinated turn bank angle proportionally to yaw rate", () => {
     const kinematics = new FlightKinematics();
-
-    // Flight with forward speed 30 m/s
     const dt = 0.05;
 
-    // Step 1: Heading straight North (-Z)
     kinematics.computeAttitude({ x: 0, y: 0, z: -30 }, 0, dt);
-
-    // Step 2: Initiating a turn toward East (+X)
     const attTurn = kinematics.computeAttitude({ x: 10, y: 0, z: -28 }, 0.05, dt);
 
     expect(attTurn.yaw).toBeGreaterThan(0);
-    // Bank/Roll should be non-zero during turn
     expect(attTurn.roll).not.toBe(0);
   });
 
@@ -32,7 +26,7 @@ describe("FlightKinematics", () => {
 });
 
 describe("GimbalController Search and Lock", () => {
-  it("starts in SEARCHING state and executes scan pattern", () => {
+  it("starts in SEARCHING state with ~5-10 second search duration", () => {
     const gimbal = new GimbalController();
     expect(gimbal.getState()).toBe("SEARCHING");
 
@@ -40,33 +34,48 @@ describe("GimbalController Search and Lock", () => {
     const beaconPos = { x: 200, y: 200, z: -400 };
 
     const t = gimbal.update(uavPos, 0, 0, beaconPos, 0.033);
-    expect(t.range).toBeGreaterThan(300);
-    expect(t.state).toBeDefined();
+    expect(t.state).toBe("SEARCHING");
+    expect(t.searchDuration).toBeGreaterThanOrEqual(5.0);
+    expect(t.searchDuration).toBeLessThanOrEqual(10.0);
   });
 
-  it("transitions from SEARCHING -> ACQUIRING -> LOCKED when beacon is aligned", () => {
-    const gimbal = new GimbalController();
-
+  it("sweeps across sectors during search phase without premature locking", () => {
+    const gimbal = new GimbalController(6.0); // 6s search duration
     const uavPos = { x: 0, y: 200, z: 0 };
-    const beaconPos = { x: 0, y: 200, z: -300 }; // Directly in front at 0 Azimuth, 0 Elevation
+    const beaconPos = { x: 0, y: 200, z: -300 };
 
-    // Advance gimbal through update ticks
+    // Update for 2 seconds (< 6s search duration)
     for (let i = 0; i < 40; i++) {
       gimbal.update(uavPos, 0, 0, beaconPos, 0.05);
     }
 
-    // After slewing toward target, gimbal should acquire and lock
-    const finalTel = gimbal.update(uavPos, 0, 0, beaconPos, 0.05);
-    expect(["ACQUIRING", "LOCKED"]).toContain(finalTel.state);
-    expect(finalTel.trackingErrorMrad).toBeLessThan(50); // within 50 mrad
+    // Must still be SEARCHING across airspace sectors
+    expect(gimbal.getState()).toBe("SEARCHING");
   });
 
-  it("can break lock and re-enter SEARCHING", () => {
+  it("transitions to ACQUIRING and LOCKED after search duration elapses and intercepts target", () => {
+    const gimbal = new GimbalController(2.0); // Configure 2s discovery for fast unit test
+    const uavPos = { x: 0, y: 200, z: 0 };
+    const beaconPos = { x: 0, y: 200, z: -300 };
+
+    // Advance 4 seconds (past searchDuration 2.0s)
+    for (let i = 0; i < 80; i++) {
+      gimbal.update(uavPos, 0, 0, beaconPos, 0.05);
+    }
+
+    const finalTel = gimbal.update(uavPos, 0, 0, beaconPos, 0.05);
+    expect(["ACQUIRING", "LOCKED"]).toContain(finalTel.state);
+  });
+
+  it("breaks lock and initiates a new 5-10 second search cycle", () => {
     const gimbal = new GimbalController();
     gimbal.forceLock(0, 0);
     expect(gimbal.getState()).toBe("LOCKED");
 
     gimbal.breakLock();
     expect(gimbal.getState()).toBe("SEARCHING");
+    const tel = gimbal.update({ x: 0, y: 200, z: 0 }, 0, 0, { x: 0, y: 200, z: -300 }, 0.033);
+    expect(tel.searchTime).toBeCloseTo(0.033, 2);
+    expect(tel.searchDuration).toBeGreaterThanOrEqual(5.0);
   });
 });
