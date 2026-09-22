@@ -54,6 +54,30 @@ export class CameraManager {
     return this.zoomLevel;
   }
 
+  public projectToScreen(worldPos: Vector3D, screenWidth: number, screenHeight: number): {
+    x: number;
+    y: number;
+    inFront: boolean;
+    inFov: boolean;
+    distance: number;
+  } {
+    const v = new THREE.Vector3(worldPos.x, worldPos.y, worldPos.z);
+    const dist = this.camera.position.distanceTo(v);
+
+    const toTarget = new THREE.Vector3().subVectors(v, this.camera.position).normalize();
+    const forward = this.camera.getWorldDirection(new THREE.Vector3());
+    const dot = forward.dot(toTarget);
+    const inFront = dot > 0.05;
+
+    const proj = v.project(this.camera);
+
+    const x = ((proj.x + 1) / 2) * screenWidth;
+    const y = ((-proj.y + 1) / 2) * screenHeight;
+    const inFov = inFront && Math.abs(proj.x) <= 1.02 && Math.abs(proj.y) <= 1.02;
+
+    return { x, y, inFront, inFov, distance: dist };
+  }
+
   public update(
     uav1Pos: Vector3D,
     uav1Attitude: FlightAttitude,

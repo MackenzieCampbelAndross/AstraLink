@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>ASTRA LINK — Transmitter Optical Camera POV & Dual UAV Simulation</title>
+    <title>ASTRA LINK — FSOC Optical Gimbal Camera POV</title>
     <style>
       :root {
         --hud-cyan: #00f0ff;
@@ -11,7 +11,7 @@
         --hud-amber: #ffaa00;
         --hud-red: #ff3366;
         --hud-dim: rgba(0, 240, 255, 0.45);
-        --panel-bg: rgba(7, 14, 26, 0.88);
+        --panel-bg: rgba(6, 15, 28, 0.88);
         --panel-border: rgba(0, 240, 255, 0.35);
         --font-mono: "Fira Code", "Cascadia Code", "SF Mono", Consolas, monospace;
       }
@@ -30,7 +30,7 @@
         background-color: #030712;
         color: var(--hud-cyan);
         font-family: var(--font-mono);
-        font-size: 12px;
+        font-size: 11px;
       }
 
       #canvas-container {
@@ -42,7 +42,19 @@
         z-index: 1;
       }
 
-      /* Fullscreen Optical HUD Overlay */
+      /* Subtle Optical Sensor Vignette */
+      .sensor-vignette {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        box-shadow: inset 0 0 90px rgba(0, 20, 45, 0.7);
+        pointer-events: none;
+        z-index: 5;
+      }
+
+      /* Optical HUD Overlay */
       .hud-overlay {
         position: absolute;
         top: 0;
@@ -61,18 +73,6 @@
         pointer-events: auto;
       }
 
-      /* Optical Vignette & Sensor Grid */
-      .sensor-vignette {
-        position: absolute;
-        top: 0;
-        left: 0;
-        width: 100%;
-        height: 100%;
-        box-shadow: inset 0 0 100px rgba(0, 15, 35, 0.8);
-        pointer-events: none;
-        z-index: 5;
-      }
-
       /* Top Header & Compass Ribbon */
       .header-section {
         display: flex;
@@ -89,7 +89,7 @@
       }
 
       .title {
-        font-size: 14px;
+        font-size: 13px;
         font-weight: 700;
         letter-spacing: 2px;
         color: #fff;
@@ -97,12 +97,12 @@
       }
 
       .subtitle {
-        font-size: 10px;
+        font-size: 9px;
         color: var(--hud-dim);
         letter-spacing: 1px;
       }
 
-      /* Center Compass Ribbon */
+      /* Compass Ribbon */
       .compass-container {
         background: var(--panel-bg);
         border: 1px solid var(--panel-border);
@@ -131,7 +131,7 @@
         margin-top: 2px;
       }
 
-      /* Status Badges */
+      /* Badges */
       .badge-group {
         display: flex;
         gap: 8px;
@@ -149,7 +149,7 @@
       }
 
       .badge-locked {
-        background: rgba(0, 255, 136, 0.15);
+        background: rgba(0, 255, 136, 0.18);
         color: var(--hud-green);
         border-color: var(--hud-green);
         box-shadow: 0 0 12px rgba(0, 255, 136, 0.4);
@@ -167,7 +167,7 @@
         50% { opacity: 0.5; }
       }
 
-      /* Center Optical Reticle Layer */
+      /* Center Optical Boresight Crosshair */
       .center-reticle-layer {
         position: absolute;
         top: 50%;
@@ -181,60 +181,95 @@
 
       .crosshair-h {
         position: absolute;
-        width: 60px;
+        width: 50px;
         height: 1px;
         background: var(--hud-cyan);
-        opacity: 0.7;
+        opacity: 0.8;
       }
 
       .crosshair-v {
         position: absolute;
         width: 1px;
-        height: 60px;
+        height: 50px;
         background: var(--hud-cyan);
-        opacity: 0.7;
+        opacity: 0.8;
       }
 
-      .center-circle {
+      .center-pipper {
         position: absolute;
-        width: 24px;
-        height: 24px;
-        border: 1px dashed var(--hud-cyan);
+        width: 4px;
+        height: 4px;
+        background: var(--hud-cyan);
         border-radius: 50%;
-        opacity: 0.6;
       }
 
-      /* Dynamic Target Tracking Box */
+      /* Optical Sensor Acquisition Gate Brackets */
+      .sensor-gate {
+        position: absolute;
+        width: 140px;
+        height: 100px;
+        border-left: 2px solid rgba(0, 240, 255, 0.4);
+        border-right: 2px solid rgba(0, 240, 255, 0.4);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+
+      .sensor-scanline {
+        width: 100%;
+        height: 1px;
+        background: linear-gradient(90deg, transparent, var(--hud-cyan), transparent);
+        animation: scanline-move 2.2s infinite ease-in-out;
+      }
+
+      @keyframes scanline-move {
+        0% { transform: translateY(-45px); opacity: 0.2; }
+        50% { transform: translateY(45px); opacity: 0.8; }
+        100% { transform: translateY(-45px); opacity: 0.2; }
+      }
+
+      /* Dynamic Screen-Projected Target Tracking Box */
       #target-box {
         position: absolute;
-        width: 50px;
-        height: 50px;
-        border: 2px solid var(--hud-amber);
-        transition: border-color 0.2s, transform 0.05s ease-out;
+        width: 54px;
+        height: 54px;
+        pointer-events: none;
         transform: translate(-50%, -50%);
-        display: flex;
-        flex-direction: column;
-        justify-content: space-between;
+        z-index: 25;
+        transition: opacity 0.15s;
+      }
+
+      #target-box.hidden {
+        display: none;
+      }
+
+      /* Tactical Corner Brackets */
+      .corner-tl { position: absolute; top: 0; left: 0; width: 10px; height: 10px; border-top: 2px solid; border-left: 2px solid; }
+      .corner-tr { position: absolute; top: 0; right: 0; width: 10px; height: 10px; border-top: 2px solid; border-right: 2px solid; }
+      .corner-bl { position: absolute; bottom: 0; left: 0; width: 10px; height: 10px; border-bottom: 2px solid; border-left: 2px solid; }
+      .corner-br { position: absolute; bottom: 0; right: 0; width: 10px; height: 10px; border-bottom: 2px solid; border-right: 2px solid; }
+
+      #target-box.acquiring {
+        color: var(--hud-amber);
+        filter: drop-shadow(0 0 8px rgba(255, 170, 0, 0.7));
       }
 
       #target-box.locked {
-        border-color: var(--hud-green);
-        box-shadow: 0 0 15px rgba(0, 255, 136, 0.5);
-      }
-
-      #target-box.searching {
-        border: 1px dashed var(--hud-amber);
-        border-radius: 50%;
+        color: var(--hud-green);
+        filter: drop-shadow(0 0 10px rgba(0, 255, 136, 0.8));
       }
 
       .box-tag {
         font-size: 8px;
         font-weight: 700;
         position: absolute;
-        top: -14px;
-        left: 0;
+        top: -16px;
+        left: -4px;
         white-space: nowrap;
         color: inherit;
+        background: rgba(0, 0, 0, 0.6);
+        padding: 1px 4px;
+        border-radius: 2px;
       }
 
       /* Left Telemetry Panel */
@@ -293,6 +328,29 @@
 
       .data-val.accent-cyan {
         color: var(--hud-cyan);
+      }
+
+      /* Signal Strength Bar */
+      .signal-bar-container {
+        width: 100%;
+        height: 6px;
+        background: rgba(255, 255, 255, 0.1);
+        border-radius: 3px;
+        overflow: hidden;
+        margin-top: 3px;
+        margin-bottom: 6px;
+      }
+
+      .signal-bar-fill {
+        height: 100%;
+        width: 15%;
+        background: var(--hud-amber);
+        transition: width 0.15s ease, background-color 0.2s;
+      }
+
+      .signal-bar-fill.locked {
+        background: var(--hud-green);
+        box-shadow: 0 0 8px var(--hud-green);
       }
 
       /* Footer Controls Toolbar */
@@ -373,6 +431,15 @@
     <div id="canvas-container"></div>
     <div class="sensor-vignette"></div>
 
+    <!-- Screen Projected Target Tracker Box (Snaps directly over the target UAV beacon) -->
+    <div id="target-box" class="hidden">
+      <div class="corner-tl"></div>
+      <div class="corner-tr"></div>
+      <div class="corner-bl"></div>
+      <div class="corner-br"></div>
+      <span id="target-box-label" class="box-tag">LOCKED</span>
+    </div>
+
     <div class="hud-overlay">
       <!-- Top Section -->
       <div class="header-section">
@@ -395,15 +462,15 @@
         </div>
       </div>
 
-      <!-- Center Optical Crosshairs & Dynamic Box -->
+      <!-- Center Optical Boresight Crosshair & Sensor Gate -->
       <div class="center-reticle-layer">
         <div class="crosshair-h"></div>
         <div class="crosshair-v"></div>
-        <div class="center-circle"></div>
+        <div class="center-pipper"></div>
 
-        <!-- Target Acquisition & Tracking Box -->
-        <div id="target-box" class="searching">
-          <span id="target-box-label" class="box-tag">SCANNING</span>
+        <!-- Optical Sensor Gate -->
+        <div class="sensor-gate">
+          <div id="sensor-scanline" class="sensor-scanline"></div>
         </div>
       </div>
 
@@ -412,28 +479,40 @@
         <!-- Optical Sensor & Flight Telemetry Panel -->
         <div class="panel interactive">
           <div class="panel-title">
-            <span>Gimbal Optical Tracking</span>
+            <span>Electro-Optical Sensor</span>
             <span id="val-mode-tag" style="color: var(--hud-cyan);">POV CAMERA</span>
           </div>
 
           <div class="data-row">
-            <span class="data-label">Gimbal State:</span>
+            <span class="data-label">Gimbal Mode:</span>
             <span id="val-gimbal-state" class="data-val accent-amber">SEARCHING</span>
           </div>
           <div class="data-row">
-            <span class="data-label">Search Sector:</span>
-            <span id="val-search-sector" class="data-val accent-amber">ALPHA-01</span>
+            <span class="data-label">Pattern:</span>
+            <span id="val-search-sector" class="data-val accent-amber">RASTER SCAN: SECTOR 01</span>
           </div>
           <div class="data-row">
             <span class="data-label">Search Sweep:</span>
             <span id="val-search-time" class="data-val">0.0s / 7.0s</span>
           </div>
+
+          <!-- Signal Strength Bar -->
+          <div style="margin-top: 6px;">
+            <div class="data-row" style="margin-bottom: 2px;">
+              <span class="data-label">Beacon RSSI (Carrier):</span>
+              <span id="val-signal-rssi" class="data-val">12%</span>
+            </div>
+            <div class="signal-bar-container">
+              <div id="signal-bar" class="signal-bar-fill"></div>
+            </div>
+          </div>
+
           <div class="data-row">
             <span class="data-label">Lock Duration:</span>
             <span id="val-lock-duration" class="data-val">0.0 s</span>
           </div>
           <div class="data-row">
-            <span class="data-label">Tracking Error:</span>
+            <span class="data-label">Pointing Error:</span>
             <span id="val-tracking-err" class="data-val accent-cyan">0.0 mrad</span>
           </div>
           <div class="data-row">
@@ -444,23 +523,23 @@
           <div style="margin: 6px 0; border-top: 1px dashed rgba(255,255,255,0.15);"></div>
 
           <div class="data-row">
-            <span class="data-label">Gimbal Az / El:</span>
+            <span class="data-label">Gimbal Pan / Tilt:</span>
             <span id="val-gimbal-angles" class="data-val">0.0° / 0.0°</span>
           </div>
           <div class="data-row">
-            <span class="data-label">Optical Link Beam:</span>
-            <span id="val-optical-link" class="data-val accent-amber">SEARCHING BEACON</span>
+            <span class="data-label">Optical Laser Link:</span>
+            <span id="val-optical-link" class="data-val accent-amber">STANDBY</span>
           </div>
           <div class="data-row">
-            <span class="data-label">Optical Zoom:</span>
-            <span id="val-zoom" class="data-val accent-cyan">1.0x (FOV 42°)</span>
+            <span class="data-label">Optical FOV / Zoom:</span>
+            <span id="val-zoom" class="data-val accent-cyan">1.0x (42.0°)</span>
           </div>
 
           <div style="margin: 6px 0; border-top: 1px dashed rgba(255,255,255,0.15);"></div>
 
           <div class="data-row">
-            <span class="data-label">UAV 1 Altitude / Speed:</span>
-            <span id="val-uav1-stats" class="data-val">180m / 35 m/s</span>
+            <span class="data-label">UAV 1 Telemetry:</span>
+            <span id="val-uav1-stats" class="data-val">180m ALT / 35 m/s</span>
           </div>
           <div class="data-row">
             <span class="data-label">UAV 2 (Target) Motion:</span>

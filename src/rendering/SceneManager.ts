@@ -15,8 +15,8 @@ export class SceneManager {
 
     // 1. Scene
     this.scene = new THREE.Scene();
-    this.scene.background = new THREE.Color(0x060913);
-    this.scene.fog = new THREE.FogExp2(0x060913, 0.00035);
+    this.scene.background = new THREE.Color(0x7598ba);
+    this.scene.fog = new THREE.FogExp2(0x8fa8bf, 0.0001);
 
     // 2. Camera (Developer / World Debug Camera)
     const aspect = container.clientWidth / (container.clientHeight || 1);
@@ -28,7 +28,7 @@ export class SceneManager {
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     this.renderer.setSize(container.clientWidth, container.clientHeight);
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    this.renderer.toneMappingExposure = 1.2;
+    this.renderer.toneMappingExposure = 0.85;
     container.appendChild(this.renderer.domElement);
 
     // 4. Orbit Controls

@@ -8,6 +8,14 @@ import { GimbalController, GimbalTelemetry } from "./simulation/gimbal/GimbalCon
 import { SimulationEngine } from "./simulation/SimulationEngine";
 import { GroundTruth, MotionType, SimulationConfig, SimulationStateSnapshot, Vector3D } from "./types";
 
+export interface ScreenTargetProjection {
+  x: number;
+  y: number;
+  inFront: boolean;
+  inFov: boolean;
+  distance: number;
+}
+
 export interface FullTelemetrySnapshot {
   simState: SimulationStateSnapshot;
   uav1Position: Vector3D;
@@ -17,6 +25,7 @@ export interface FullTelemetrySnapshot {
   fps: number;
   cameraMode: CameraViewMode;
   zoom: number;
+  targetScreen: ScreenTargetProjection;
 }
 
 export interface SimulatorCallbacks {
@@ -275,6 +284,13 @@ export class Simulator {
       this.cameraManager.camera
     );
 
+    // Project target beacon onto screen coordinates
+    const targetScreen = this.cameraManager.projectToScreen(
+      simState.beacon.worldPosition,
+      window.innerWidth,
+      window.innerHeight
+    );
+
     // Notify UI
     if (this.callbacks.onTelemetryUpdate) {
       this.callbacks.onTelemetryUpdate({
@@ -285,7 +301,8 @@ export class Simulator {
         gimbal: this.currentGimbalTelemetry,
         fps: this.fps,
         cameraMode: this.cameraManager.getMode(),
-        zoom: this.cameraManager.getZoom()
+        zoom: this.cameraManager.getZoom(),
+        targetScreen
       });
     }
   }

@@ -13,6 +13,8 @@ window.addEventListener("DOMContentLoaded", () => {
   const compassDisplay = document.getElementById("compass-display")!;
   const targetBox = document.getElementById("target-box")!;
   const targetBoxLabel = document.getElementById("target-box-label")!;
+  const signalBar = document.getElementById("signal-bar")!;
+  const valSignalRssi = document.getElementById("val-signal-rssi")!;
 
   const valGimbalState = document.getElementById("val-gimbal-state")!;
   const valSearchSector = document.getElementById("val-search-sector")!;
@@ -39,7 +41,7 @@ window.addEventListener("DOMContentLoaded", () => {
   const zoomButtons = document.querySelectorAll<HTMLButtonElement>(".btn-zoom");
   const motionButtons = document.querySelectorAll<HTMLButtonElement>(".btn-motion");
 
-  // Initialize Simulator with dual UAVs, realistic atmosphere, and Camera POV
+  // Initialize Simulator
   const simulator = new Simulator(container, DEFAULT_CONFIG, {
     onTelemetryUpdate: (snapshot: FullTelemetrySnapshot) => {
       updateHUD(snapshot);
@@ -48,6 +50,7 @@ window.addEventListener("DOMContentLoaded", () => {
 
   function updateHUD(s: FullTelemetrySnapshot): void {
     const g = s.gimbal;
+    const ts = s.targetScreen;
 
     // 1. Badge & State
     badgeFps.textContent = `${s.fps} FPS`;
@@ -65,14 +68,19 @@ window.addEventListener("DOMContentLoaded", () => {
     valUav1Stats.textContent = `${alt}m ALT / 35 m/s`;
 
     // Zoom & View Mode
-    valZoom.textContent = `${s.zoom.toFixed(1)}x`;
+    valZoom.textContent = `${s.zoom.toFixed(1)}x (${(42.0 / s.zoom).toFixed(1)}°)`;
     valModeTag.textContent = s.cameraMode.replace("_", " ");
 
     // Heading Compass Tape
     let hdgDeg = Math.round((-s.uav1Attitude.yaw * 180 / Math.PI + 360) % 360);
     compassDisplay.textContent = `HDG ${hdgDeg.toString().padStart(3, "0")}° | EL ${elDeg}°`;
 
-    // 2. Optical Link Status, Search Sector & Target Box Styling
+    // Signal Strength Meter
+    const signalPercent = Math.round(g.signalStrength * 100);
+    valSignalRssi.textContent = `${signalPercent}%`;
+    signalBar.style.width = `${signalPercent}%`;
+
+    // 2. Optical Link Status & Target Box Tracking
     if (g.state === "LOCKED") {
       badgeLock.textContent = "BEACON LOCKED";
       badgeLock.className = "badge badge-locked";
@@ -85,9 +93,18 @@ window.addEventListener("DOMContentLoaded", () => {
       valOpticalLink.textContent = "OPTICAL LINK ACTIVE (10 Gbps)";
       valOpticalLink.className = "data-val accent-green";
 
-      targetBox.className = "locked";
-      targetBoxLabel.textContent = `LOCKED [${g.trackingErrorMrad.toFixed(1)} mrad]`;
-      targetBox.style.transform = `translate(-50%, -50%) translate(${g.searchCoord.x * 20}px, ${g.searchCoord.y * 20}px) scale(1.0)`;
+      signalBar.className = "signal-bar-fill locked";
+
+      // Position tracking box dead-center over the projected target aircraft
+      if (ts.inFront) {
+        targetBox.className = "";
+        targetBox.classList.add("locked");
+        targetBox.style.left = `${ts.x}px`;
+        targetBox.style.top = `${ts.y}px`;
+        targetBoxLabel.textContent = `LOCKED [${g.trackingErrorMrad.toFixed(1)} mrad]`;
+      } else {
+        targetBox.className = "hidden";
+      }
     } else if (g.state === "ACQUIRING") {
       badgeLock.textContent = "ACQUIRING BEACON";
       badgeLock.className = "badge badge-searching";
@@ -100,10 +117,19 @@ window.addEventListener("DOMContentLoaded", () => {
       valOpticalLink.textContent = "COARSE ALIGNING...";
       valOpticalLink.className = "data-val accent-cyan";
 
-      targetBox.className = "";
-      targetBoxLabel.textContent = "ACQUIRING BEACON";
-      targetBox.style.transform = `translate(-50%, -50%) translate(${g.searchCoord.x * 100}px, ${g.searchCoord.y * 100}px) scale(1.2)`;
+      signalBar.className = "signal-bar-fill";
+
+      if (ts.inFront) {
+        targetBox.className = "";
+        targetBox.classList.add("acquiring");
+        targetBox.style.left = `${ts.x}px`;
+        targetBox.style.top = `${ts.y}px`;
+        targetBoxLabel.textContent = "ACQUIRING BEACON";
+      } else {
+        targetBox.className = "hidden";
+      }
     } else {
+      // SEARCHING
       badgeLock.textContent = "SEARCHING AIRSPACE";
       badgeLock.className = "badge badge-searching";
       valGimbalState.className = "data-val accent-amber";
@@ -112,12 +138,13 @@ window.addEventListener("DOMContentLoaded", () => {
       valSearchSector.className = "data-val accent-amber";
       valSearchTime.textContent = `${g.searchTime.toFixed(1)}s / ${g.searchDuration.toFixed(1)}s`;
 
-      valOpticalLink.textContent = "SEARCHING SECTORS...";
+      valOpticalLink.textContent = "SEARCHING UNCERTAINTY CONE";
       valOpticalLink.className = "data-val accent-amber";
 
-      targetBox.className = "searching";
-      targetBoxLabel.textContent = `SWEEP: ${g.currentSector.split(" ")[0]}`;
-      targetBox.style.transform = `translate(-50%, -50%) translate(${g.searchCoord.x * 160}px, ${g.searchCoord.y * 160}px) scale(1.35)`;
+      signalBar.className = "signal-bar-fill";
+
+      // In searching mode, hide target box until beacon is intercepted
+      targetBox.className = "hidden";
     }
   }
 

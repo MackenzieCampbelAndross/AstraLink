@@ -1,4 +1,4 @@
-import { Vector3D } from "../../types";
+﻿import { Vector3D } from "../../types";
 
 export type GimbalState = "SEARCHING" | "ACQUIRING" | "LOCKED" | "LOST";
 
@@ -11,11 +11,11 @@ export interface GimbalTelemetry {
   trackingErrorMrad: number;// Pointing error in milliradians
   range: number;            // Distance to target in meters
   lockDuration: number;     // Seconds locked
-  searchCoord: { x: number; y: number }; // Normalized [-1, 1] coordinate on camera HUD
   opticalLinkActive: boolean;
   searchTime: number;       // Current time spent searching in seconds
   searchDuration: number;   // Target discovery time (approx 5-10s)
   currentSector: string;    // Active search sector label
+  signalStrength: number;   // 0.0 to 1.0 (noise floor vs carrier peak)
 }
 
 export class GimbalController {
@@ -28,25 +28,10 @@ export class GimbalController {
   private acquireTimer = 0;
   private lockDuration = 0;
 
-  private currentSectorIndex = 0;
-  private waypointTimer = 0;
-
-  // Mechanical specs
-  private readonly maxSlewRate = (45 * Math.PI) / 180; // 45 deg/sec
-  private readonly searchFov = (18 * Math.PI) / 180;   // 18 deg FOV for acquisition
+  // Mechanical gimbal limits & rates
+  private readonly maxSlewRate = (50 * Math.PI) / 180; // 50 deg/sec
+  private readonly searchFov = (20 * Math.PI) / 180;   // 20 deg FOV for acquisition
   private readonly lockThreshold = (0.5 * Math.PI) / 180; // 0.5 deg (8.7 mrad) lock threshold
-
-  // Systematic pseudo-random search sectors across the airspace (azimuth, elevation)
-  private readonly searchSectors: Array<{ az: number; el: number; name: string }> = [
-    { az: -0.65, el: 0.18, name: "ALPHA-01 [LEFT HIGH]" },
-    { az: -0.20, el: -0.25, name: "BRAVO-02 [CENTER LOW]" },
-    { az: 0.60, el: 0.15, name: "CHARLIE-03 [RIGHT HIGH]" },
-    { az: 0.35, el: -0.18, name: "DELTA-04 [RIGHT LOW]" },
-    { az: -0.50, el: -0.05, name: "ECHO-05 [LEFT HORIZON]" },
-    { az: 0.10, el: 0.28, name: "FOXTROT-06 [ZENITH SWEEP]" },
-    { az: -0.30, el: 0.22, name: "GOLF-07 [LEFT APEX]" },
-    { az: 0.50, el: -0.10, name: "HOTEL-08 [RIGHT HORIZON]" }
-  ];
 
   constructor(customDuration?: number) {
     this.reset();
@@ -57,19 +42,16 @@ export class GimbalController {
 
   public reset(): void {
     this.state = "SEARCHING";
-    this.currentAzimuth = 0;
-    this.currentElevation = 0;
+    this.currentAzimuth = -0.3; // Start slightly offset to sweep naturally
+    this.currentElevation = 0.05;
     this.searchTime = 0;
     this.acquireTimer = 0;
     this.lockDuration = 0;
-    this.currentSectorIndex = 0;
-    this.waypointTimer = 0;
-    // Set a realistic randomized discovery time between 6.0 and 8.5 seconds
     this.randomizeDiscoveryTime();
   }
 
   public setSearchDuration(seconds: number): void {
-    this.searchDuration = Math.max(1.0, seconds);
+    this.searchDuration = Math.max(0.5, seconds);
   }
 
   public breakLock(): void {
@@ -78,9 +60,8 @@ export class GimbalController {
     this.acquireTimer = 0;
     this.lockDuration = 0;
     this.randomizeDiscoveryTime();
-    // Start search away from current lock position
-    this.currentSectorIndex = (this.currentSectorIndex + 2) % this.searchSectors.length;
-    this.waypointTimer = 0;
+    // Offset search away from last lock
+    this.currentAzimuth -= 0.4;
   }
 
   public forceSearch(): void {
@@ -115,57 +96,41 @@ export class GimbalController {
     // Transform target bearing into aircraft relative body frame
     let targetAz = worldBearing - uavYaw;
     while (targetAz > Math.PI) targetAz -= 2 * Math.PI;
-    while (targetAz < -Math.PI) targetAz += 2 * Math.PI;
+    while (targetAz < -Math.PI) targetAz -= 2 * Math.PI;
 
     let targetEl = worldElevation - uavPitch;
 
-    let searchCoord = { x: 0, y: 0 };
-    let activeSectorName = "SEARCHING AIRSPACE";
+    let activeSectorName = "RASTER SWEEP: SECTOR A";
+    let signalStrength = 0.05 + Math.sin(this.searchTime * 15) * 0.03; // Low noise floor
 
     if (this.state === "SEARCHING") {
       this.searchTime += dt;
-      this.waypointTimer += dt;
       this.lockDuration = 0;
 
-      // Phase 1: Wide pseudo-random ordered search across the sky
+      // Phase 1: Realistic continuous raster search across the sky (approx 5-10 seconds)
       if (this.searchTime < this.searchDuration) {
-        // Move between search sectors every 1.2 to 1.6 seconds
-        const sectorDuration = 1.35;
-        if (this.waypointTimer >= sectorDuration) {
-          this.waypointTimer = 0;
-          this.currentSectorIndex = (this.currentSectorIndex + 1) % this.searchSectors.length;
-        }
+        // Natural raster scan: horizontal sweeps with progressive vertical step
+        const t = this.searchTime;
+        const scanAz = 0.55 * Math.sin(t * 0.85); // Sweeps left to right (-31° to +31°)
+        const scanEl = 0.14 * Math.cos(t * 0.35) - 0.04; // Smooth elevation modulation (-10° to +6°)
 
-        const sector = this.searchSectors[this.currentSectorIndex];
-        activeSectorName = sector.name;
+        // Smoothly drive gimbal along the raster pattern
+        const panRate = Math.min(1.0, 5.0 * dt);
+        this.currentAzimuth += (scanAz - this.currentAzimuth) * panRate;
+        this.currentElevation += (scanEl - this.currentElevation) * panRate;
 
-        // Smoothly steer gimbal towards current search sector
-        const azDiff = sector.az - this.currentAzimuth;
-        const elDiff = sector.el - this.currentElevation;
-        const panRate = Math.min(1.0, 3.5 * dt);
-        this.currentAzimuth += azDiff * panRate;
-        this.currentElevation += elDiff * panRate;
-
-        // Realistic sensor micro-dither / sweep motion
-        const ditherPhase = this.searchTime * 12.0;
-        const ditherAz = Math.sin(ditherPhase) * 0.015;
-        const ditherEl = Math.cos(ditherPhase * 0.7) * 0.012;
-
-        this.currentAzimuth += ditherAz;
-        this.currentElevation += ditherEl;
-
-        // HUD search scan coordinate
-        searchCoord = {
-          x: Math.sin(this.searchTime * 4.0) * 0.75,
-          y: Math.cos(this.searchTime * 3.2) * 0.65
-        };
+        // Active sector text based on scan direction
+        const sectorNum = Math.floor((t * 0.4) % 4) + 1;
+        const dirText = scanAz > 0 ? "EASTBOUND" : "WESTBOUND";
+        activeSectorName = `RASTER SCAN: SECTOR 0${sectorNum} [${dirText}]`;
       } else {
-        // Phase 2: After 5-10s of systematic sweeping, the search sweeps into the target sector!
-        activeSectorName = "TARGET SECTOR [INTERCEPT]";
+        // Phase 2: After 5-10s of systematic sweeping, the scan intersects the target bearing!
+        activeSectorName = "TARGET INTERCEPT [BEACON SPOT]";
+
         const azDiff = targetAz - this.currentAzimuth;
         const elDiff = targetEl - this.currentElevation;
 
-        // Sweep toward target bearing
+        // Slew toward target bearing
         const interceptSpeed = Math.min(1.0, 4.5 * dt);
         this.currentAzimuth += azDiff * interceptSpeed;
         this.currentElevation += elDiff * interceptSpeed;
@@ -177,15 +142,12 @@ export class GimbalController {
           this.state = "ACQUIRING";
           this.acquireTimer = 0;
         }
-
-        searchCoord = {
-          x: Math.min(1.0, Math.max(-1.0, azDiff / this.searchFov)),
-          y: Math.min(1.0, Math.max(-1.0, elDiff / this.searchFov))
-        };
       }
     } else if (this.state === "ACQUIRING") {
       activeSectorName = "BEACON DETECTED [COARSE ALIGN]";
-      // Rapid slew to center optical beacon
+      signalStrength = 0.65 + Math.sin(this.acquireTimer * 20) * 0.15;
+
+      // Rapid closed-loop slew to center optical beacon into reticle
       const errAz = targetAz - this.currentAzimuth;
       const errEl = targetEl - this.currentElevation;
       const totalErr = Math.hypot(errAz, errEl);
@@ -197,25 +159,21 @@ export class GimbalController {
         this.currentElevation += (errEl / totalErr) * step;
       }
 
-      searchCoord = {
-        x: (errAz / this.searchFov) * 0.6,
-        y: (errEl / this.searchFov) * 0.6
-      };
-
       if (totalErr <= this.lockThreshold) {
         this.acquireTimer += dt;
         if (this.acquireTimer >= 0.2) {
           this.state = "LOCKED";
         }
       } else {
-        this.acquireTimer = Math.max(0, this.acquireTimer - dt * 0.4);
+        this.acquireTimer = Math.max(0, this.acquireTimer - dt * 0.3);
       }
     } else if (this.state === "LOCKED") {
-      activeSectorName = "CARRIER LOCKED [TRACKING]";
+      activeSectorName = "OPTICAL CARRIER LOCKED";
+      signalStrength = 0.96 + Math.sin(this.lockDuration * 5) * 0.03; // Peak signal
       this.lockDuration += dt;
 
-      // Fine continuous optical lead tracking
-      const trackSpeed = Math.min(1.0, 22.0 * dt);
+      // Continuous fine optical lead tracking: gimbal holds target dead-center
+      const trackSpeed = Math.min(1.0, 24.0 * dt);
       this.currentAzimuth += (targetAz - this.currentAzimuth) * trackSpeed;
       this.currentElevation += (targetEl - this.currentElevation) * trackSpeed;
 
@@ -237,11 +195,11 @@ export class GimbalController {
       trackingErrorMrad,
       range,
       lockDuration: this.lockDuration,
-      searchCoord,
       opticalLinkActive: this.state === "LOCKED",
       searchTime: this.searchTime,
       searchDuration: this.searchDuration,
-      currentSector: activeSectorName
+      currentSector: activeSectorName,
+      signalStrength
     };
   }
 
@@ -250,7 +208,7 @@ export class GimbalController {
   }
 
   private randomizeDiscoveryTime(): void {
-    // Approx 5 to 9 seconds to find the target beacon
-    this.searchDuration = 6.0 + (Math.sin(this.searchTime * 17.3) * 0.5 + 0.5) * 3.0;
+    // 6.0 to 8.5 seconds
+    this.searchDuration = 6.0 + Math.random() * 2.5;
   }
 }
