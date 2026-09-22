@@ -1,0 +1,99 @@
+{
+  "timestamp": 1790056381.444,
+  "phase": "PHASE_8_SECURITY_VALIDATION",
+  "threat_model": "Attacker with network observation, beacon cloning, replay, tampering, and control message injection capabilities without legitimate private keys",
+  "security_metrics": {
+    "authentication": {
+      "attempts": 11,
+      "successes": 11,
+      "failures": 0,
+      "avg_latency_sec": 0.0001,
+      "success_rate": {
+        "numerator": 11,
+        "denominator": 11,
+        "rate": 1.0,
+        "percentage_str": "100.00%"
+      },
+      "failure_rate": {
+        "numerator": 0,
+        "denominator": 11,
+        "rate": 0.0,
+        "percentage_str": "0.00%"
+      }
+    },
+    "replay_protection": {
+      "attempts": 11,
+      "rejections": 11,
+      "rejection_rate": {
+        "numerator": 11,
+        "denominator": 11,
+        "rate": 1.0,
+        "percentage_str": "100.00%"
+      }
+    },
+    "cloned_beacon_spoofing": {
+      "attempts": 11,
+      "rejections": 11,
+      "rejection_rate": {
+        "numerator": 11,
+        "denominator": 11,
+        "rate": 1.0,
+        "percentage_str": "100.00%"
+      }
+    },
+    "invalid_credentials": {
+      "attempts": 1,
+      "rejections": 1,
+      "rejection_rate": {
+        "numerator": 1,
+        "denominator": 1,
+        "rate": 1.0,
+        "percentage_str": "100.00%"
+      }
+    },
+    "packet_integrity": {
+      "tampering_attempts": 11,
+      "integrity_failures": 11,
+      "packets_rejected": 11,
+      "rejection_rate": {
+        "numerator": 11,
+        "denominator": 11,
+        "rate": 1.0,
+        "percentage_str": "100.00%"
+      }
+    },
+    "forged_control_messages": {
+      "forged_ack_attempts": 1,
+      "forged_ack_rejections": 1,
+      "forged_resume_attempts": 1,
+      "forged_resume_rejections": 1
+    },
+    "authorization_enforcement": {
+      "unauthorized_transmissions_prevented": 11,
+      "trust_degradations": 1
+    },
+    "recovery": {
+      "attempts": 1,
+      "successes": 1,
+      "failures": 0,
+      "avg_duration_sec": 0.0037,
+      "max_duration_sec": 0.0037,
+      "success_rate": {
+        "numerator": 1,
+        "denominator": 1,
+        "rate": 1.0,
+        "percentage_str": "100.00%"
+      }
+    },
+    "transport_performance": {
+      "packets_transmitted": 11,
+      "packets_retransmitted": 0,
+      "duplicate_packets_detected": 0,
+      "transfer_completions": 1,
+      "total_delivered_payload_bytes": 1080,
+      "elapsed_time_sec": 0.001,
+      "goodput_bytes_per_sec": 1080000.0,
+      "goodput_kbps": 8640.0
+    }
+  }
+}

@@ -1,0 +1,43 @@
+{
+  "CAMERA": {
+    "resolution_width": 640,
+    "resolution_height": 480,
+    "horizontal_fov_deg": 4.0,
+    "vertical_fov_deg": 3.0,
+    "update_rate_hz": 30.0
+  },
+  "CONTROL": {
+    "control_rate_hz": 20.0,
+    "max_pan_speed_deg_per_sec": 5.0,
+    "max_tilt_speed_deg_per_sec": 5.0,
+    "kp": 1.0,
+    "ki": 0.1,
+    "kd": 0.01,
+    "feedforward_gain": 0.5
+  },
+  "TRACKING": {
+    "confidence_threshold": 0.5,
+    "process_noise": 0.1,
+    "measurement_noise": 1.0,
+    "mahalanobis_threshold": 9.21,
+    "confirmation_frames": 3,
+    "maximum_missed_frames": 5,
+    "maximum_covariance_threshold": 100.0
+  },
+  "REACQUISITION": {
+    "initial_search_radius": 0.1,
+    "maximum_search_radius": 1.0,
+    "levy_alpha": 1.5,
+    "levy_min_step": 0.01,
+    "levy_max_step": 0.5,
+    "raster_grid_spacing": 0.1,
+    "raster_search_radius": 1.0,
+    "timeout": 10.0
+  },
+  "METRICS": {
+    "enable_logging": true,
+    "enable_ground_truth": false,
+    "log_output_path": null,
+    "plot_output_path": null
+  }
+}

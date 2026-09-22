@@ -1,0 +1,7 @@
+{
+  "session": {
+    "session_lifetime_seconds": 300,
+    "rekey_interval_seconds": 120,
+    "hkdf_hash_algorithm": "SHA256"
+  }
+}

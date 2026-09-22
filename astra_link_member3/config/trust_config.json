@@ -1,0 +1,14 @@
+{
+  "trust": {
+    "minimum_motion_consistency": 0.80,
+    "optical_response_tolerance": 0.05,
+    "minimum_signal_quality": 0.50,
+    "uncertainty_sigma_threshold": 3.0
+  },
+  "optical_challenge": {
+    "probe_count": 4,
+    "response_noise_std": 0.01,
+    "challenge_timeout_ms": 500,
+    "probe_offset_angle": 0.02
+  }
+}

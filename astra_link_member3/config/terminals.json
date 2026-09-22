@@ -1,0 +1,18 @@
+{
+  "terminals": [
+    {
+      "terminal_id": "T1",
+      "name": "Terminal 1 (Ground Base)",
+      "identity_public_key": "-----BEGIN PUBLIC KEY-----\nMCowBQYDK2VwAyEAb0fv1FcAektAr5Jy3u8/tz8WxrDtEF2F6OpMlDIdRTA=\n-----END PUBLIC KEY-----\n",
+      "agreement_public_key": "-----BEGIN PUBLIC KEY-----\nMCowBQYDK2VuAyEAct3sakpFzLaL5B8+AMUfsO+YD++ABdZY8LpIjLCzMwQ=\n-----END PUBLIC KEY-----\n",
+      "fingerprint": "SHA256:1E:DD:CF:31:BF:E9:0A:36:AD:0C:5F:E0:5D:F4:D5:FF:D4:3F:85:88:D6:6B:BD:B2:26:18:C6:13:E9:46:0B:0E"
+    },
+    {
+      "terminal_id": "T2",
+      "name": "Terminal 2 (Mobile Asset)",
+      "identity_public_key": "-----BEGIN PUBLIC KEY-----\nMCowBQYDK2VwAyEAMRwGeep/c2u+4M6IehctFj7bedeFa6g4qyUt719KZyQ=\n-----END PUBLIC KEY-----\n",
+      "agreement_public_key": "-----BEGIN PUBLIC KEY-----\nMCowBQYDK2VuAyEATA6IbcLc7HUctfGmi6ul0TlSGrYNZSln7pq8A1ZHIRQ=\n-----END PUBLIC KEY-----\n",
+      "fingerprint": "SHA256:65:22:8E:87:68:E8:E4:79:0B:9D:E3:C5:FF:19:A0:A3:D3:AA:D1:76:15:28:4C:2D:FA:77:95:9C:32:77:18:20"
+    }
+  ]
+}

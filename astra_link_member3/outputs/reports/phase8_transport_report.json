@@ -1,0 +1,27 @@
+{
+  "timestamp": 1790056381.444,
+  "phase": "PHASE_8_TRANSPORT_METRICS",
+  "transport_performance": {
+    "packets_transmitted": 11,
+    "packets_retransmitted": 0,
+    "duplicate_packets_detected": 0,
+    "transfer_completions": 1,
+    "total_delivered_payload_bytes": 1080,
+    "elapsed_time_sec": 0.001,
+    "goodput_bytes_per_sec": 1080000.0,
+    "goodput_kbps": 8640.0
+  },
+  "recovery_performance": {
+    "attempts": 1,
+    "successes": 1,
+    "failures": 0,
+    "avg_duration_sec": 0.0037,
+    "max_duration_sec": 0.0037,
+    "success_rate": {
+      "numerator": 1,
+      "denominator": 1,
+      "rate": 1.0,
+      "percentage_str": "100.00%"
+    }
+  }
+}

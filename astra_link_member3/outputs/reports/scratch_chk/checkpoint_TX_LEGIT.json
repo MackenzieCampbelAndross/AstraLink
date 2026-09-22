@@ -1,0 +1,10 @@
+{
+  "transfer_id": "TX_LEGIT",
+  "total_packets": 100,
+  "last_confirmed": 50,
+  "next_expected": 51,
+  "session_id": "6aa61430fb59e35ad2b34856eb5d129a",
+  "tracking_epoch": 1,
+  "payload_hash": "hash_demo",
+  "checkpoint_timestamp": 1790056381.436
+}
