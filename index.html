@@ -3,18 +3,16 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>ASTRA LINK — FSOC Terminal Alignment Simulation Engine</title>
+    <title>ASTRA LINK — Transmitter Optical Camera POV & Dual UAV Simulation</title>
     <style>
       :root {
-        --bg-color: #060913;
-        --panel-bg: rgba(9, 16, 29, 0.85);
-        --panel-border: rgba(30, 70, 115, 0.45);
-        --accent-cyan: #00f0ff;
-        --accent-emerald: #00ff88;
-        --accent-pink: #ff3366;
-        --accent-amber: #ffaa00;
-        --text-primary: #e6f1ff;
-        --text-secondary: #8899b5;
+        --hud-cyan: #00f0ff;
+        --hud-green: #00ff88;
+        --hud-amber: #ffaa00;
+        --hud-red: #ff3366;
+        --hud-dim: rgba(0, 240, 255, 0.45);
+        --panel-bg: rgba(7, 14, 26, 0.88);
+        --panel-border: rgba(0, 240, 255, 0.35);
         --font-mono: "Fira Code", "Cascadia Code", "SF Mono", Consolas, monospace;
       }
 
@@ -29,10 +27,10 @@
         width: 100%;
         height: 100%;
         overflow: hidden;
-        background-color: var(--bg-color);
-        color: var(--text-primary);
+        background-color: #030712;
+        color: var(--hud-cyan);
         font-family: var(--font-mono);
-        font-size: 13px;
+        font-size: 12px;
       }
 
       #canvas-container {
@@ -44,7 +42,8 @@
         z-index: 1;
       }
 
-      .hud-layer {
+      /* Fullscreen Optical HUD Overlay */
+      .hud-overlay {
         position: absolute;
         top: 0;
         left: 0;
@@ -55,61 +54,194 @@
         display: flex;
         flex-direction: column;
         justify-content: space-between;
-        padding: 16px;
+        padding: 14px 18px;
       }
 
       .interactive {
         pointer-events: auto;
       }
 
-      /* Header Bar */
-      .header-bar {
+      /* Optical Vignette & Sensor Grid */
+      .sensor-vignette {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        box-shadow: inset 0 0 100px rgba(0, 15, 35, 0.8);
+        pointer-events: none;
+        z-index: 5;
+      }
+
+      /* Top Header & Compass Ribbon */
+      .header-section {
         display: flex;
         justify-content: space-between;
-        align-items: center;
+        align-items: flex-start;
+      }
+
+      .system-id {
         background: var(--panel-bg);
         border: 1px solid var(--panel-border);
-        border-radius: 8px;
-        padding: 10px 18px;
-        backdrop-filter: blur(12px);
+        border-radius: 6px;
+        padding: 8px 14px;
+        backdrop-filter: blur(8px);
       }
 
-      .title-group {
-        display: flex;
-        align-items: center;
-        gap: 12px;
-      }
-
-      .title-text {
+      .title {
+        font-size: 14px;
         font-weight: 700;
-        font-size: 15px;
-        letter-spacing: 1.5px;
-        color: var(--accent-cyan);
-        text-shadow: 0 0 10px rgba(0, 240, 255, 0.4);
+        letter-spacing: 2px;
+        color: #fff;
+        text-shadow: 0 0 10px var(--hud-cyan);
+      }
+
+      .subtitle {
+        font-size: 10px;
+        color: var(--hud-dim);
+        letter-spacing: 1px;
+      }
+
+      /* Center Compass Ribbon */
+      .compass-container {
+        background: var(--panel-bg);
+        border: 1px solid var(--panel-border);
+        border-radius: 6px;
+        padding: 6px 20px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        width: 320px;
+        backdrop-filter: blur(8px);
+      }
+
+      .compass-ribbon {
+        font-size: 11px;
+        font-weight: 600;
+        letter-spacing: 3px;
+        color: var(--hud-cyan);
+      }
+
+      .compass-pointer {
+        width: 0;
+        height: 0;
+        border-left: 5px solid transparent;
+        border-right: 5px solid transparent;
+        border-top: 6px solid var(--hud-cyan);
+        margin-top: 2px;
+      }
+
+      /* Status Badges */
+      .badge-group {
+        display: flex;
+        gap: 8px;
+        align-items: center;
       }
 
       .badge {
         font-size: 10px;
-        padding: 2px 7px;
+        font-weight: 600;
+        padding: 4px 9px;
         border-radius: 4px;
         background: rgba(0, 240, 255, 0.12);
-        color: var(--accent-cyan);
-        border: 1px solid rgba(0, 240, 255, 0.3);
+        border: 1px solid var(--panel-border);
         letter-spacing: 0.5px;
       }
 
-      .badge-status {
-        background: rgba(0, 255, 136, 0.12);
-        color: var(--accent-emerald);
-        border: 1px solid rgba(0, 255, 136, 0.3);
+      .badge-locked {
+        background: rgba(0, 255, 136, 0.15);
+        color: var(--hud-green);
+        border-color: var(--hud-green);
+        box-shadow: 0 0 12px rgba(0, 255, 136, 0.4);
       }
 
-      /* Main content layout */
-      .middle-layout {
+      .badge-searching {
+        background: rgba(255, 170, 0, 0.15);
+        color: var(--hud-amber);
+        border-color: var(--hud-amber);
+        animation: pulse-border 1.5s infinite;
+      }
+
+      @keyframes pulse-border {
+        0%, 100% { opacity: 1; }
+        50% { opacity: 0.5; }
+      }
+
+      /* Center Optical Reticle Layer */
+      .center-reticle-layer {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        pointer-events: none;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+
+      .crosshair-h {
+        position: absolute;
+        width: 60px;
+        height: 1px;
+        background: var(--hud-cyan);
+        opacity: 0.7;
+      }
+
+      .crosshair-v {
+        position: absolute;
+        width: 1px;
+        height: 60px;
+        background: var(--hud-cyan);
+        opacity: 0.7;
+      }
+
+      .center-circle {
+        position: absolute;
+        width: 24px;
+        height: 24px;
+        border: 1px dashed var(--hud-cyan);
+        border-radius: 50%;
+        opacity: 0.6;
+      }
+
+      /* Dynamic Target Tracking Box */
+      #target-box {
+        position: absolute;
+        width: 50px;
+        height: 50px;
+        border: 2px solid var(--hud-amber);
+        transition: border-color 0.2s, transform 0.05s ease-out;
+        transform: translate(-50%, -50%);
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+      }
+
+      #target-box.locked {
+        border-color: var(--hud-green);
+        box-shadow: 0 0 15px rgba(0, 255, 136, 0.5);
+      }
+
+      #target-box.searching {
+        border: 1px dashed var(--hud-amber);
+        border-radius: 50%;
+      }
+
+      .box-tag {
+        font-size: 8px;
+        font-weight: 700;
+        position: absolute;
+        top: -14px;
+        left: 0;
+        white-space: nowrap;
+        color: inherit;
+      }
+
+      /* Left Telemetry Panel */
+      .middle-section {
         display: flex;
         justify-content: space-between;
-        flex: 1;
-        margin: 12px 0;
+        margin: auto 0;
         pointer-events: none;
       }
 
@@ -117,313 +249,260 @@
         background: var(--panel-bg);
         border: 1px solid var(--panel-border);
         border-radius: 8px;
-        padding: 14px;
-        backdrop-filter: blur(12px);
-        width: 330px;
-        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+        padding: 12px 16px;
+        backdrop-filter: blur(10px);
+        width: 300px;
+        box-shadow: 0 8px 30px rgba(0, 0, 0, 0.6);
       }
 
-      .panel-header {
-        font-size: 12px;
-        font-weight: 600;
-        text-transform: uppercase;
-        letter-spacing: 1px;
-        color: var(--accent-cyan);
-        margin-bottom: 10px;
-        padding-bottom: 6px;
+      .panel-title {
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 1.5px;
+        color: #fff;
+        margin-bottom: 8px;
         border-bottom: 1px solid var(--panel-border);
+        padding-bottom: 4px;
         display: flex;
         justify-content: space-between;
       }
 
-      .telemetry-row {
+      .data-row {
         display: flex;
         justify-content: space-between;
-        align-items: center;
-        margin-bottom: 6px;
-        line-height: 1.4;
-      }
-
-      .telemetry-label {
-        color: var(--text-secondary);
+        margin-bottom: 5px;
         font-size: 11px;
       }
 
-      .telemetry-val {
-        font-weight: 500;
-        color: var(--text-primary);
+      .data-label {
+        color: var(--hud-dim);
       }
 
-      .telemetry-val.highlight {
-        color: var(--accent-cyan);
+      .data-val {
+        font-weight: 600;
+        color: #fff;
       }
 
-      .telemetry-val.accent-emerald {
-        color: var(--accent-emerald);
+      .data-val.accent-green {
+        color: var(--hud-green);
       }
 
-      .telemetry-val.accent-pink {
-        color: var(--accent-pink);
+      .data-val.accent-amber {
+        color: var(--hud-amber);
       }
 
-      .section-divider {
-        margin: 8px 0;
-        border-top: 1px dashed rgba(255, 255, 255, 0.1);
+      .data-val.accent-cyan {
+        color: var(--hud-cyan);
       }
 
-      /* Legend Panel */
-      .legend-panel {
-        width: 250px;
-        align-self: flex-start;
-      }
-
-      .legend-item {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        margin-bottom: 6px;
-        font-size: 11px;
-      }
-
-      .legend-color {
-        width: 10px;
-        height: 10px;
-        border-radius: 2px;
-        flex-shrink: 0;
-      }
-
-      /* Controls Footer Toolbar */
-      .controls-bar {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 12px;
+      /* Footer Controls Toolbar */
+      .footer-controls {
         background: var(--panel-bg);
         border: 1px solid var(--panel-border);
         border-radius: 8px;
         padding: 10px 16px;
-        backdrop-filter: blur(12px);
-        align-items: center;
+        backdrop-filter: blur(10px);
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px;
         justify-content: space-between;
+        align-items: center;
       }
 
-      .btn-group {
+      .btn-cluster {
         display: flex;
         gap: 6px;
         align-items: center;
       }
 
-      .btn-group-label {
-        font-size: 11px;
-        color: var(--text-secondary);
-        margin-right: 4px;
+      .cluster-label {
+        font-size: 10px;
+        color: var(--hud-dim);
         text-transform: uppercase;
+        margin-right: 4px;
       }
 
       button {
-        background: rgba(22, 45, 75, 0.6);
-        border: 1px solid rgba(0, 240, 255, 0.25);
-        color: var(--text-primary);
+        background: rgba(14, 28, 48, 0.8);
+        border: 1px solid var(--panel-border);
+        color: #cbe3ff;
         font-family: inherit;
-        font-size: 12px;
-        padding: 6px 12px;
-        border-radius: 5px;
+        font-size: 11px;
+        padding: 5px 11px;
+        border-radius: 4px;
         cursor: pointer;
-        transition: all 0.15s ease-in-out;
+        transition: all 0.15s ease;
       }
 
       button:hover {
         background: rgba(0, 240, 255, 0.2);
-        border-color: var(--accent-cyan);
-        box-shadow: 0 0 8px rgba(0, 240, 255, 0.3);
+        border-color: var(--hud-cyan);
+        box-shadow: 0 0 10px rgba(0, 240, 255, 0.3);
       }
 
       button.active {
-        background: var(--accent-cyan);
-        color: #050b14;
-        font-weight: 600;
-        border-color: var(--accent-cyan);
-        box-shadow: 0 0 12px rgba(0, 240, 255, 0.5);
+        background: var(--hud-cyan);
+        color: #030712;
+        font-weight: 700;
+        border-color: var(--hud-cyan);
+        box-shadow: 0 0 12px rgba(0, 240, 255, 0.6);
       }
 
-      button.btn-primary {
+      button.btn-action-green {
         background: rgba(0, 255, 136, 0.15);
-        border-color: var(--accent-emerald);
-        color: var(--accent-emerald);
+        border-color: var(--hud-green);
+        color: var(--hud-green);
       }
 
-      button.btn-primary:hover {
+      button.btn-action-green:hover {
         background: rgba(0, 255, 136, 0.3);
-        box-shadow: 0 0 10px rgba(0, 255, 136, 0.4);
       }
 
-      button.btn-danger {
+      button.btn-action-red {
         background: rgba(255, 51, 102, 0.15);
-        border-color: var(--accent-pink);
-        color: var(--accent-pink);
+        border-color: var(--hud-red);
+        color: var(--hud-red);
       }
 
-      button.btn-danger:hover {
+      button.btn-action-red:hover {
         background: rgba(255, 51, 102, 0.3);
-        box-shadow: 0 0 10px rgba(255, 51, 102, 0.4);
-      }
-
-      .shortcut-hint {
-        font-size: 9px;
-        opacity: 0.6;
-        margin-left: 2px;
       }
     </style>
   </head>
   <body>
     <div id="canvas-container"></div>
+    <div class="sensor-vignette"></div>
 
-    <div class="hud-layer">
-      <!-- Header -->
-      <div class="header-bar interactive">
-        <div class="title-group">
-          <span class="title-text">ASTRA LINK</span>
-          <span class="badge">FSOC SIMULATION ENGINE</span>
-          <span class="badge">PURE TS / DETERMINISTIC</span>
+    <div class="hud-overlay">
+      <!-- Top Section -->
+      <div class="header-section">
+        <div class="system-id interactive">
+          <div class="title">ASTRA LINK // GIMBAL CAMERA POV</div>
+          <div class="subtitle">OPTICAL TRANSCEIVER TERMINAL 1 (UAV-TX)</div>
         </div>
-        <div>
-          <span id="badge-status" class="badge badge-status">RUNNING</span>
-          <span id="fps-badge" class="badge">60 FPS</span>
+
+        <!-- Compass Ribbon -->
+        <div class="compass-container interactive">
+          <div id="compass-display" class="compass-ribbon">HDG 240° | W | 255°</div>
+          <div class="compass-pointer"></div>
+        </div>
+
+        <!-- Badges -->
+        <div class="badge-group interactive">
+          <span id="badge-lock" class="badge badge-searching">SEARCHING</span>
+          <span id="badge-carrier" class="badge">OPTICAL 1550nm</span>
+          <span id="badge-fps" class="badge">60 FPS</span>
         </div>
       </div>
 
-      <!-- Middle layout: Telemetry HUD + Legend -->
-      <div class="middle-layout">
-        <div class="panel interactive">
-          <div class="panel-header">
-            <span>Ground Truth Telemetry</span>
-            <span id="val-seed" style="color: var(--text-secondary); font-size: 10px;">Seed: 42</span>
-          </div>
+      <!-- Center Optical Crosshairs & Dynamic Box -->
+      <div class="center-reticle-layer">
+        <div class="crosshair-h"></div>
+        <div class="crosshair-v"></div>
+        <div class="center-circle"></div>
 
-          <div class="telemetry-row">
-            <span class="telemetry-label">Simulation Time:</span>
-            <span id="val-time" class="telemetry-val highlight">0.000 s</span>
-          </div>
-          <div class="telemetry-row">
-            <span class="telemetry-label">Frame ID / dt:</span>
-            <span id="val-frame" class="telemetry-val">0 (30.0 Hz)</span>
-          </div>
-          <div class="telemetry-row">
-            <span class="telemetry-label">Active Motion:</span>
-            <span id="val-motion" class="telemetry-val accent-emerald">CIRCULAR</span>
-          </div>
-
-          <div class="section-divider"></div>
-
-          <div class="telemetry-row">
-            <span class="telemetry-label">Target Pos (X, Y, Z):</span>
-            <span id="val-target-pos" class="telemetry-val">0.0, 0.0, 0.0</span>
-          </div>
-          <div class="telemetry-row">
-            <span class="telemetry-label">Target Velocity (Vx, Vy, Vz):</span>
-            <span id="val-target-vel" class="telemetry-val">0.0, 0.0, 0.0</span>
-          </div>
-          <div class="telemetry-row">
-            <span class="telemetry-label">Velocity Magnitude:</span>
-            <span id="val-speed" class="telemetry-val highlight">0.00 m/s</span>
-          </div>
-          <div class="telemetry-row">
-            <span class="telemetry-label">Target Acceleration:</span>
-            <span id="val-target-acc" class="telemetry-val">0.0, 0.0, 0.0</span>
-          </div>
-
-          <div class="section-divider"></div>
-
-          <div class="telemetry-row">
-            <span class="telemetry-label">Optical Beacon Pos:</span>
-            <span id="val-beacon-pos" class="telemetry-val accent-emerald">0.0, 0.0, 0.0</span>
-          </div>
-          <div class="telemetry-row">
-            <span class="telemetry-label">Beacon State:</span>
-            <span id="val-beacon-state" class="telemetry-val">ENABLED (1.0)</span>
-          </div>
-
-          <div class="section-divider"></div>
-
-          <div class="telemetry-row">
-            <span class="telemetry-label">Terminal 1 (Ref):</span>
-            <span id="val-t1-pos" class="telemetry-val" style="font-size: 11px;">(0.0, 0.0, 0.0)</span>
-          </div>
-          <div class="telemetry-row">
-            <span class="telemetry-label">Terminal Separation:</span>
-            <span id="val-distance" class="telemetry-val highlight">0.0 m</span>
-          </div>
+        <!-- Target Acquisition & Tracking Box -->
+        <div id="target-box" class="searching">
+          <span id="target-box-label" class="box-tag">SCANNING</span>
         </div>
+      </div>
 
-        <div class="panel legend-panel interactive">
-          <div class="panel-header">Legend & Controls</div>
-          <div class="legend-item">
-            <div class="legend-color" style="background: #243b55; border: 1px solid #00d2ff;"></div>
-            <span>Terminal 1 (Reference)</span>
-          </div>
-          <div class="legend-item">
-            <div class="legend-color" style="background: #d6e4ff;"></div>
-            <span>Terminal 2 (Remote Target)</span>
-          </div>
-          <div class="legend-item">
-            <div class="legend-color" style="background: #00ffff; box-shadow: 0 0 5px #00ffff;"></div>
-            <span>Optical Beacon (FSOC)</span>
-          </div>
-          <div class="legend-item">
-            <div class="legend-color" style="background: #ff3366;"></div>
-            <span>Target Heading (Vector)</span>
-          </div>
-          <div class="legend-item">
-            <div class="legend-color" style="background: #00ffcc;"></div>
-            <span>Target Trajectory Trail</span>
-          </div>
-          <div class="legend-item">
-            <div class="legend-color" style="background: #00f0ff; opacity: 0.5;"></div>
-            <span>Optical Line of Sight (LOS)</span>
+      <!-- Middle Telemetry Section -->
+      <div class="middle-section">
+        <!-- Optical Sensor & Flight Telemetry Panel -->
+        <div class="panel interactive">
+          <div class="panel-title">
+            <span>Gimbal Optical Tracking</span>
+            <span id="val-mode-tag" style="color: var(--hud-cyan);">POV CAMERA</span>
           </div>
 
-          <div class="section-divider"></div>
-          <div style="font-size: 10px; color: var(--text-secondary); line-height: 1.6;">
-            <div>Left Click + Drag: Orbit Camera</div>
-            <div>Right Click + Drag: Pan Camera</div>
-            <div>Scroll Wheel: Zoom In / Out</div>
-            <div>Space: Play / Pause</div>
-            <div>S: Step | R: Reset</div>
+          <div class="data-row">
+            <span class="data-label">Gimbal State:</span>
+            <span id="val-gimbal-state" class="data-val accent-amber">SEARCHING</span>
+          </div>
+          <div class="data-row">
+            <span class="data-label">Lock Duration:</span>
+            <span id="val-lock-duration" class="data-val">0.0 s</span>
+          </div>
+          <div class="data-row">
+            <span class="data-label">Tracking Error:</span>
+            <span id="val-tracking-err" class="data-val accent-cyan">0.0 mrad</span>
+          </div>
+          <div class="data-row">
+            <span class="data-label">Target Range:</span>
+            <span id="val-target-range" class="data-val">0.0 m</span>
+          </div>
+
+          <div style="margin: 6px 0; border-top: 1px dashed rgba(255,255,255,0.15);"></div>
+
+          <div class="data-row">
+            <span class="data-label">Gimbal Az / El:</span>
+            <span id="val-gimbal-angles" class="data-val">0.0° / 0.0°</span>
+          </div>
+          <div class="data-row">
+            <span class="data-label">Optical Link Beam:</span>
+            <span id="val-optical-link" class="data-val accent-amber">SEARCHING BEACON</span>
+          </div>
+          <div class="data-row">
+            <span class="data-label">Optical Zoom:</span>
+            <span id="val-zoom" class="data-val accent-cyan">1.0x (FOV 42°)</span>
+          </div>
+
+          <div style="margin: 6px 0; border-top: 1px dashed rgba(255,255,255,0.15);"></div>
+
+          <div class="data-row">
+            <span class="data-label">UAV 1 Altitude / Speed:</span>
+            <span id="val-uav1-stats" class="data-val">180m / 35 m/s</span>
+          </div>
+          <div class="data-row">
+            <span class="data-label">UAV 2 (Target) Motion:</span>
+            <span id="val-uav2-motion" class="data-val accent-green">CIRCULAR</span>
           </div>
         </div>
       </div>
 
       <!-- Footer Controls Toolbar -->
-      <div class="controls-bar interactive">
-        <!-- Playback -->
-        <div class="btn-group">
-          <button id="btn-play" class="btn-primary">Pause <span class="shortcut-hint">[Space]</span></button>
-          <button id="btn-step">Step <span class="shortcut-hint">[S]</span></button>
-          <button id="btn-reset" class="btn-danger">Reset <span class="shortcut-hint">[R]</span></button>
+      <div class="footer-controls interactive">
+        <!-- Camera View Mode -->
+        <div class="btn-cluster">
+          <span class="cluster-label">Camera:</span>
+          <button class="btn-cam active" data-cam="POV">Gimbal POV</button>
+          <button class="btn-cam" data-cam="UAV1_CHASE">UAV 1 Chase</button>
+          <button class="btn-cam" data-cam="UAV2_CHASE">UAV 2 Chase</button>
+          <button class="btn-cam" data-cam="TACTICAL_ORBIT">Tactical Free</button>
         </div>
 
-        <!-- Motion Selection -->
-        <div class="btn-group">
-          <span class="btn-group-label">Motion:</span>
-          <button class="btn-motion active" data-motion="circular">Circular</button>
+        <!-- Optical Zoom -->
+        <div class="btn-cluster">
+          <span class="cluster-label">Zoom:</span>
+          <button class="btn-zoom active" data-zoom="1.0">1x</button>
+          <button class="btn-zoom" data-zoom="2.0">2x</button>
+          <button class="btn-zoom" data-zoom="4.0">4x</button>
+          <button class="btn-zoom" data-zoom="8.0">8x</button>
+        </div>
+
+        <!-- Gimbal Actions -->
+        <div class="btn-cluster">
+          <span class="cluster-label">Gimbal:</span>
+          <button id="btn-force-search" class="btn-action-green">Search</button>
+          <button id="btn-break-lock" class="btn-action-red">Break Lock</button>
+          <button id="btn-force-lock">Auto Lock</button>
+        </div>
+
+        <!-- Target Motion Selection -->
+        <div class="btn-cluster">
+          <span class="cluster-label">Target Flight:</span>
+          <button class="btn-motion active" data-motion="circular">Circle</button>
+          <button class="btn-motion" data-motion="figure8">Fig-8</button>
           <button class="btn-motion" data-motion="straight">Straight</button>
-          <button class="btn-motion" data-motion="figure8">Figure-8</button>
-          <button class="btn-motion" data-motion="random">Random</button>
+          <button class="btn-motion" data-motion="random">Evasive</button>
         </div>
 
-        <!-- Speed Selection -->
-        <div class="btn-group">
-          <span class="btn-group-label">Speed:</span>
-          <button class="btn-speed" data-speed="0.25">0.25x</button>
-          <button class="btn-speed" data-speed="0.5">0.5x</button>
-          <button class="btn-speed active" data-speed="1.0">1x</button>
-          <button class="btn-speed" data-speed="2.0">2x</button>
-          <button class="btn-speed" data-speed="5.0">5x</button>
-        </div>
-
-        <!-- Camera & Trail Options -->
-        <div class="btn-group">
-          <button id="btn-trail" class="active">Trail</button>
-          <button id="btn-cam-reset">Reset Cam</button>
+        <!-- Playback -->
+        <div class="btn-cluster">
+          <button id="btn-play">Pause [Space]</button>
+          <button id="btn-step">Step [S]</button>
+          <button id="btn-reset">Reset [R]</button>
         </div>
       </div>
     </div>
