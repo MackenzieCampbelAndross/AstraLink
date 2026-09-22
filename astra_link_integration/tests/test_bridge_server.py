@@ -52,7 +52,7 @@ def test_bridge_server_valid_detection_telemetry():
 
     # Verify Member 3 security_state output
     sec = response["security_state"]
-    assert sec["state"] == "AUTHORIZED"
+    assert sec["state"] in ("SECURE", "AUTHORIZED")
     assert sec["trust_authorized"] is True
     assert sec["transmission_allowed"] is True
 

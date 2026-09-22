@@ -1,3 +1,28 @@
+export interface CommunicationTelemetry {
+  authentication_state: string;
+  session_state: string;
+  session_id: string | null;
+  authorization_state: string;
+  transmission_allowed: boolean;
+  transfer_id: string | null;
+  total_packets: number;
+  acknowledged_packets: number;
+  retransmissions: number;
+  packet_loss: number;
+  tamper_rejections: number;
+  bytes_transferred: number;
+  transfer_completion: number;
+  completed: boolean;
+  recovery_state: string;
+  tracking_epoch: number;
+  decrypted_payload: string | null;
+  fault_injection: {
+    loss_rate: number;
+    ack_loss_rate: number;
+    tamper_enabled: boolean;
+  };
+}
+
 export interface BridgeDetectionPayload {
   type: "detection_telemetry";
   timestamp: number;
@@ -41,6 +66,7 @@ export interface BridgeTelemetryResponse {
     transmission_allowed: boolean;
     reason: string;
   };
+  communication_telemetry?: CommunicationTelemetry;
 }
 
 export interface BridgeStatusCallbacks {
@@ -106,30 +132,57 @@ export class PythonBridgeClient {
   private setDisconnected(): void {
     if (this.connected) {
       this.connected = false;
-      console.warn("[BridgeClient] Disconnected from Python Gateway. Entering offline dev mode.");
+      console.warn("[BridgeClient] Disconnected from Python Gateway.");
       if (this.callbacks.onStatusChange) {
         this.callbacks.onStatusChange(false);
       }
     }
-    this.scheduleReconnect();
-  }
-
-  private scheduleReconnect(): void {
+    this.ws = null;
     if (!this.reconnectTimer) {
-      this.reconnectTimer = setTimeout(() => {
-        this.reconnectTimer = null;
-        this.connect();
-      }, 3000);
+      this.reconnectTimer = setTimeout(() => this.connect(), 3000);
     }
   }
 
-  public isConnected(): boolean {
-    return this.connected;
+  public sendDetection(payload: BridgeDetectionPayload): void {
+    if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+      this.ws.send(JSON.stringify(payload));
+    }
   }
 
-  public sendDetection(payload: BridgeDetectionPayload): void {
-    if (this.connected && this.ws && this.ws.readyState === WebSocket.OPEN) {
-      this.ws.send(JSON.stringify(payload));
+  public startAuthentication(): void {
+    if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+      this.ws.send(JSON.stringify({ type: "start_authentication" }));
+    }
+  }
+
+  public startTransfer(payload: string): void {
+    if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+      this.ws.send(JSON.stringify({ type: "start_transfer", payload }));
+    }
+  }
+
+  public setFaultInjection(lossRate: number, ackLossRate: number, tamperEnabled: boolean): void {
+    if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+      this.ws.send(
+        JSON.stringify({
+          type: "inject_faults",
+          loss_rate: lossRate,
+          ack_loss_rate: ackLossRate,
+          tamper_enabled: tamperEnabled,
+        })
+      );
+    }
+  }
+
+  public simulateLinkLoss(): void {
+    if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+      this.ws.send(JSON.stringify({ type: "simulate_link_loss", reason: "BEACON_TRACKING_LOST" }));
+    }
+  }
+
+  public resumeTransfer(): void {
+    if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+      this.ws.send(JSON.stringify({ type: "resume_transfer" }));
     }
   }
 
@@ -143,5 +196,9 @@ export class PythonBridgeClient {
       this.ws = null;
     }
     this.connected = false;
+  }
+
+  public isConnected(): boolean {
+    return this.connected;
   }
 }

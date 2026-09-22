@@ -2,18 +2,6 @@
 
 Provides a real-time WebSocket service linking Member 1 (TypeScript/Three.js frontend)
 to Member 2 (Python Optical Tracker) and Member 3 (Security & Trust Layer).
-
-Architecture:
-    Frontend (Member 1)
-           │
-           ▼ WebSocket (ws://127.0.0.1:8765)
-    bridge_server.py
-           │
-           ├── 1. Parse DetectionResult JSON
-           ├── 2. Run Member 2 Tracker.update()
-           ├── 3. Adapt M2 TrackingState via TrackingAdapter
-           ├── 4. Evaluate Member 3 TrustEngine & TransmissionAuthorizationGate
-           └── 5. Send TelemetryResponse JSON back to Frontend
 """
 
 import asyncio
@@ -29,9 +17,12 @@ import websockets
 _repo_root = Path(__file__).resolve().parent.parent
 _m2_src = _repo_root / "astra-link-member2" / "src"
 _m3_root = _repo_root / "astra_link_member3"
+_m3_src = _repo_root / "astra_link_member3" / "src"
 
 if _m2_src.exists() and str(_m2_src) not in sys.path:
     sys.path.insert(0, str(_m2_src))
+if _m3_src.exists() and str(_m3_src) not in sys.path:
+    sys.path.insert(0, str(_m3_src))
 if _m3_root.exists() and str(_m3_root) not in sys.path:
     sys.path.insert(0, str(_m3_root))
 
@@ -39,6 +30,7 @@ from astra_link_tracking.models.interfaces import DetectionResult, TrackingMode
 from astra_link_tracking.tracking.tracker import Tracker
 from astra_link_integration.adapter import TrackingAdapter
 from astra_link_integration.pipeline import IntegratedTrackingSecurityPipeline
+from astra_link_integration.secure_communication_manager import SecureCommunicationManager
 from src.trust.security_state import SecurityState
 
 logging.basicConfig(level=logging.INFO, format="[BridgeServer] %(levelname)s - %(message)s")
@@ -52,20 +44,16 @@ class AstraLinkBridgeServer:
         self.port = port
         self.tracker = Tracker()
         self.pipeline = IntegratedTrackingSecurityPipeline(min_motion_consistency=0.80)
+        self.comm_mgr = SecureCommunicationManager()
         self.terminal_id = "T1"
         self.remote_terminal_id = "T2"
         self.authenticated = True  # Mutual authentication state
         self.freshness = True
+        self.last_m2_state = None
+        self.last_sec_eval = None
 
     def process_message(self, message_str: str) -> Dict[str, Any]:
-        """Process incoming JSON message from Member 1 and return TelemetryResponse.
-
-        Args:
-            message_str: Raw JSON message string received from WebSocket client.
-
-        Returns:
-            Dictionary response payload to send back to client.
-        """
+        """Process incoming JSON message from Member 1 and return TelemetryResponse."""
         try:
             data = json.loads(message_str)
         except Exception as e:
@@ -88,7 +76,40 @@ class AstraLinkBridgeServer:
                 "freshness": self.freshness,
             }
 
-        # Parse DetectionResult
+        # Secure Communication Operations
+        if msg_type == "start_authentication":
+            res = self.comm_mgr.start_authentication()
+            return {"type": "authentication_response", **res}
+
+        if msg_type == "start_transfer":
+            payload_str = str(data.get("payload", "ASTRA LINK SECURE TEST PAYLOAD"))
+            sec_eval = self.last_sec_eval
+            if sec_eval is None and self.last_m2_state is not None:
+                _, _, sec_eval = self.pipeline.process_telemetry(self.last_m2_state, self.terminal_id, self.remote_terminal_id, self.authenticated, self.freshness)
+
+            res = self.comm_mgr.start_transfer(payload_str, sec_eval)
+            return {"type": "transfer_start_response", **res}
+
+        if msg_type == "inject_faults":
+            loss_rate = float(data.get("loss_rate", 0.0))
+            ack_loss_rate = float(data.get("ack_loss_rate", 0.0))
+            tamper_enabled = bool(data.get("tamper_enabled", False))
+            self.comm_mgr.set_fault_injection(loss_rate, ack_loss_rate, tamper_enabled)
+            return {"type": "faults_injected_ack", **self.comm_mgr.get_telemetry()["fault_injection"]}
+
+        if msg_type == "simulate_link_loss":
+            res = self.comm_mgr.simulate_link_loss(reason=str(data.get("reason", "USER_SIMULATED_LINK_LOSS")))
+            return {"type": "link_loss_response", **res}
+
+        if msg_type == "resume_transfer":
+            sec_eval = self.last_sec_eval
+            if sec_eval is None and self.last_m2_state is not None:
+                _, _, sec_eval = self.pipeline.process_telemetry(self.last_m2_state, self.terminal_id, self.remote_terminal_id, self.authenticated, self.freshness)
+
+            res = self.comm_mgr.reacquire_and_resume(sec_eval)
+            return {"type": "resume_response", **res}
+
+        # Parse DetectionResult payload
         try:
             timestamp = float(data.get("timestamp", 0.0))
             frame_id = int(data.get("frame_id", 0))
@@ -113,6 +134,7 @@ class AstraLinkBridgeServer:
 
         # 1. Member 2 Tracker update
         m2_state, camera_cmd = self.tracker.update(detection)
+        self.last_m2_state = m2_state
 
         # 2. Member 3 Security Pipeline evaluation
         m3_state, trust_result, auth_result = self.pipeline.process_telemetry(
@@ -122,8 +144,12 @@ class AstraLinkBridgeServer:
             authentication_valid=self.authenticated,
             freshness_valid=self.freshness,
         )
+        self.last_sec_eval = auth_result
 
-        # 3. Format response preserving Member 2 & Member 3 semantics
+        # 3. Advance active secure communication transfer step
+        self.comm_mgr.step_transfer(auth_result)
+
+        # 4. Format response preserving Member 2 & Member 3 semantics
         response = {
             "type": "telemetry_response",
             "timestamp": timestamp,
@@ -143,41 +169,45 @@ class AstraLinkBridgeServer:
             "camera_command": {
                 "pan_command": float(camera_cmd.pan_command),
                 "tilt_command": float(camera_cmd.tilt_command),
-                "slew_rate": list(camera_cmd.slew_rate) if camera_cmd.slew_rate else [0.0, 0.0],
+                "slew_rate": [float(camera_cmd.slew_rate[0]), float(camera_cmd.slew_rate[1])],
                 "command_mode": str(camera_cmd.command_mode),
             },
             "security_state": {
-                "state": trust_result.security_state.value,
-                "trust_authorized": bool(trust_result.trust_authorized),
-                "tracking_valid": bool(trust_result.tracking_valid),
-                "motion_consistent": bool(trust_result.motion_consistent),
-                "authentication_valid": bool(trust_result.authentication_valid),
-                "freshness_valid": bool(trust_result.freshness_valid),
-                "physical_valid": bool(trust_result.physical_valid),
-                "transmission_allowed": bool(auth_result.allowed),
-                "reason": str(auth_result.reason),
+                "state": "SECURE" if auth_result.allowed else "BLOCKED",
+                "trust_authorized": trust_result.trust_authorized,
+                "tracking_valid": trust_result.tracking_valid,
+                "motion_consistent": trust_result.motion_consistent,
+                "authentication_valid": trust_result.authentication_valid,
+                "freshness_valid": trust_result.freshness_valid,
+                "physical_valid": trust_result.physical_valid,
+                "transmission_allowed": auth_result.allowed,
+                "reason": auth_result.reason,
             },
+            "communication_telemetry": self.comm_mgr.get_telemetry(),
         }
 
         return response
 
-    async def handle_client(self, websocket, path=None):
-        """Handle WebSocket connection lifecycle for Member 1 frontend."""
-        logging.info("Member 1 Frontend connected to Python Bridge Server.")
+    async def handle_client(self, websocket: websockets.WebSocketServerProtocol):
+        """Handle continuous WebSocket client connection."""
+        client_address = websocket.remote_address
+        logging.info(f"Client connected: {client_address}")
         try:
             async for message in websocket:
                 response = self.process_message(message)
                 await websocket.send(json.dumps(response))
-        except websockets.exceptions.ConnectionClosed:
-            logging.info("Member 1 Frontend disconnected.")
+        except websockets.exceptions.ConnectionClosedOK:
+            logging.info(f"Client disconnected cleanly: {client_address}")
+        except websockets.exceptions.ConnectionClosedError as e:
+            logging.warning(f"Client disconnected with error: {client_address} - {e}")
         except Exception as e:
-            logging.error(f"Error in websocket connection: {e}")
+            logging.error(f"Unexpected error handling client {client_address}: {e}")
 
     async def start(self):
         """Start async WebSocket server."""
         logging.info(f"Starting Astra Link Telemetry Bridge Server on ws://{self.host}:{self.port}...")
         async with websockets.serve(self.handle_client, self.host, self.port):
-            await asyncio.Future()  # Run forever
+            await asyncio.Future()  # Keep server running
 
 
 def main():
@@ -185,7 +215,7 @@ def main():
     try:
         asyncio.run(server.start())
     except KeyboardInterrupt:
-        logging.info("Bridge Server stopped by user.")
+        logging.info("Server shutting down cleanly.")
 
 
 if __name__ == "__main__":

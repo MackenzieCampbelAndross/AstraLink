@@ -41,6 +41,20 @@ window.addEventListener("DOMContentLoaded", () => {
   const valSecTxAllowed = document.getElementById("val-sec-tx-allowed")!;
   const valSecReason = document.getElementById("val-sec-reason")!;
 
+  // Secure Communication & Recovery Telemetry Elements
+  const valCommRecoveryState = document.getElementById("val-comm-recovery-state");
+  const valCommSessionId = document.getElementById("val-comm-session-id");
+  const valCommArqProgress = document.getElementById("val-comm-arq-progress");
+  const valCommArqMetrics = document.getElementById("val-comm-arq-metrics");
+  const valCommDecryptedPayload = document.getElementById("val-comm-decrypted-payload");
+
+  // Communication Action Buttons
+  const btnStartAuth = document.getElementById("btn-start-auth") as HTMLButtonElement | null;
+  const btnStartTransfer = document.getElementById("btn-start-transfer") as HTMLButtonElement | null;
+  const btnInjectFaults = document.getElementById("btn-inject-faults") as HTMLButtonElement | null;
+  const btnSimulateLinkLoss = document.getElementById("btn-simulate-link-loss") as HTMLButtonElement | null;
+  const btnResumeTransfer = document.getElementById("btn-resume-transfer") as HTMLButtonElement | null;
+
   // Button elements
   const btnPlay = document.getElementById("btn-play") as HTMLButtonElement;
   const btnStep = document.getElementById("btn-step") as HTMLButtonElement;
@@ -52,6 +66,8 @@ window.addEventListener("DOMContentLoaded", () => {
   const camButtons = document.querySelectorAll<HTMLButtonElement>(".btn-cam");
   const zoomButtons = document.querySelectorAll<HTMLButtonElement>(".btn-zoom");
   const motionButtons = document.querySelectorAll<HTMLButtonElement>(".btn-motion");
+
+  let faultStateIndex = 0; // 0: Off, 1: Packet Loss 25%, 2: Tamper On
 
   // Initialize Simulator
   const simulator = new Simulator(container, DEFAULT_CONFIG, {
@@ -102,7 +118,7 @@ window.addEventListener("DOMContentLoaded", () => {
       valSearchSector.className = "data-val accent-green";
       valSearchTime.textContent = `LOCKED (${g.lockDuration.toFixed(1)}s)`;
 
-      valOpticalLink.textContent = "OPTICAL LINK ACTIVE (10 Gbps)";
+      valOpticalLink.textContent = "OPTICAL LASER LINK ACTIVE";
       valOpticalLink.className = "data-val accent-green";
 
       signalBar.className = "signal-bar-fill locked";
@@ -170,7 +186,7 @@ window.addEventListener("DOMContentLoaded", () => {
       valSecMotionConsistency.className = bt.tracking_state.motion_consistency ? "data-val accent-green" : "data-val accent-red";
 
       valSecTrustState.textContent = bt.security_state.state;
-      valSecTrustState.className = bt.security_state.state === "AUTHORIZED" ? "data-val accent-green" : "data-val accent-amber";
+      valSecTrustState.className = bt.security_state.state === "AUTHORIZED" || bt.security_state.state === "SECURE" ? "data-val accent-green" : "data-val accent-amber";
 
       valSecAuth.textContent = bt.security_state.authentication_valid ? "AUTHENTICATED (Ed25519)" : "UNAUTHENTICATED";
       valSecAuth.className = bt.security_state.authentication_valid ? "data-val accent-green" : "data-val accent-red";
@@ -182,6 +198,23 @@ window.addEventListener("DOMContentLoaded", () => {
       valSecTxAllowed.className = bt.security_state.transmission_allowed ? "data-val accent-green" : "data-val accent-red";
 
       valSecReason.textContent = bt.security_state.reason;
+
+      // 4. Update Secure Transport & Link Recovery Telemetry HUD
+      if (bt.communication_telemetry && valCommRecoveryState && valCommSessionId && valCommArqProgress && valCommArqMetrics && valCommDecryptedPayload) {
+        const comm = bt.communication_telemetry;
+
+        valCommRecoveryState.textContent = comm.recovery_state;
+        valCommRecoveryState.className = comm.recovery_state === "CONNECTED" || comm.recovery_state === "COMPLETED" ? "data-val accent-green" : "data-val accent-amber";
+
+        const shortSession = comm.session_id ? comm.session_id.substring(0, 8) + "..." : "NONE";
+        valCommSessionId.textContent = `${shortSession} (EPOCH ${comm.tracking_epoch})`;
+
+        const pct = (comm.transfer_completion * 100).toFixed(0);
+        valCommArqProgress.textContent = `${comm.acknowledged_packets} / ${comm.total_packets} PKTS (${pct}%)`;
+
+        valCommArqMetrics.textContent = `Retx:${comm.retransmissions} | Loss:${comm.packet_loss} | Rej:${comm.tamper_rejections}`;
+        valCommDecryptedPayload.textContent = comm.decrypted_payload ? `"${comm.decrypted_payload}"` : "N/A";
+      }
     } else {
       valBackendStatus.textContent = "DISCONNECTED (DEV MODE)";
       valBackendStatus.className = "data-val accent-amber";
@@ -197,6 +230,49 @@ window.addEventListener("DOMContentLoaded", () => {
       valSecTxAllowed.className = "data-val accent-red";
       valSecReason.textContent = "BACKEND DISCONNECTED (OFFLINE DEV MODE)";
     }
+  }
+
+  // Communication Action Buttons Setup
+  if (btnStartAuth) {
+    btnStartAuth.addEventListener("click", () => {
+      simulator.getBridgeClient().startAuthentication();
+    });
+  }
+
+  if (btnStartTransfer) {
+    btnStartTransfer.addEventListener("click", () => {
+      simulator.getBridgeClient().startTransfer("ASTRA LINK SECURE TEST PAYLOAD");
+    });
+  }
+
+  if (btnInjectFaults) {
+    btnInjectFaults.addEventListener("click", () => {
+      faultStateIndex = (faultStateIndex + 1) % 3;
+      if (faultStateIndex === 0) {
+        btnInjectFaults.textContent = "Faults: Off";
+        simulator.getBridgeClient().setFaultInjection(0.0, 0.0, false);
+      } else if (faultStateIndex === 1) {
+        btnInjectFaults.textContent = "Loss: 25%";
+        simulator.getBridgeClient().setFaultInjection(0.25, 0.0, false);
+      } else {
+        btnInjectFaults.textContent = "Tamper: On";
+        simulator.getBridgeClient().setFaultInjection(0.0, 0.0, true);
+      }
+    });
+  }
+
+  if (btnSimulateLinkLoss) {
+    btnSimulateLinkLoss.addEventListener("click", () => {
+      simulator.breakLock();
+      simulator.getBridgeClient().simulateLinkLoss();
+    });
+  }
+
+  if (btnResumeTransfer) {
+    btnResumeTransfer.addEventListener("click", () => {
+      simulator.forceLock();
+      simulator.getBridgeClient().resumeTransfer();
+    });
   }
 
   // Camera selector

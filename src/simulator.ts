@@ -347,6 +347,10 @@ export class Simulator {
     }
   }
 
+  public getBridgeClient(): PythonBridgeClient {
+    return this.bridgeClient;
+  }
+
   public dispose(): void {
     if (this.animationFrameId !== undefined) {
       cancelAnimationFrame(this.animationFrameId);

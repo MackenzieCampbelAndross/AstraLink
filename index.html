@@ -596,10 +596,44 @@
 
           <div style="margin: 6px 0; border-top: 1px dashed rgba(255,255,255,0.15);"></div>
 
+          <div style="margin: 6px 0; border-top: 1px dashed rgba(255,255,255,0.15);"></div>
+
           <div class="data-row">
             <span class="data-label">Gate Policy Reason:</span>
             <span id="val-sec-reason" class="data-val" style="font-size: 9px;">BACKEND DISCONNECTED</span>
           </div>
+
+          <div style="margin: 8px 0; border-top: 1px dashed var(--hud-cyan);"></div>
+
+          <div class="panel-title" style="margin-bottom: 6px;">
+            <span>Secure Transport & Recovery</span>
+            <span id="val-comm-recovery-state" class="data-val accent-amber">IDLE</span>
+          </div>
+
+          <div class="data-row">
+            <span class="data-label">Session ID / Epoch:</span>
+            <span id="val-comm-session-id" class="data-val" style="font-size: 9px;">NONE (EPOCH 1)</span>
+          </div>
+          <div class="data-row">
+            <span class="data-label">AES-GCM ARQ Progress:</span>
+            <span id="val-comm-arq-progress" class="data-val accent-cyan">0 / 0 PKTS (0%)</span>
+          </div>
+          <div class="data-row">
+            <span class="data-label">Retx / Loss / Tamper Rej:</span>
+            <span id="val-comm-arq-metrics" class="data-val">0 / 0 / 0</span>
+          </div>
+          <div class="data-row">
+            <span class="data-label">Decrypted Payload:</span>
+            <span id="val-comm-decrypted-payload" class="data-val accent-green" style="font-size: 9px; max-width: 140px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">N/A</span>
+          </div>
+
+          <div style="margin: 6px 0; display: grid; grid-template-columns: 1fr 1fr; gap: 4px;">
+            <button id="btn-start-auth" class="btn-action-green" style="font-size: 9px; padding: 4px;">1. Mutual Auth</button>
+            <button id="btn-start-transfer" class="btn-action-cyan" style="font-size: 9px; padding: 4px;">2. Start Transfer</button>
+            <button id="btn-inject-faults" style="font-size: 9px; padding: 4px; background: rgba(255, 170, 0, 0.2); border: 1px solid var(--hud-amber); color: var(--hud-amber); border-radius: 4px; cursor: pointer;">Faults: Off</button>
+            <button id="btn-simulate-link-loss" class="btn-action-red" style="font-size: 9px; padding: 4px;">3. Link Loss</button>
+          </div>
+          <button id="btn-resume-transfer" style="width: 100%; font-size: 9px; padding: 4px; background: rgba(0, 240, 255, 0.2); border: 1px solid var(--hud-cyan); color: var(--hud-cyan); border-radius: 4px; cursor: pointer;">4. Secure Resume</button>
         </div>
       </div>
 
