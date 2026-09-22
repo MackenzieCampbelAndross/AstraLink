@@ -1,0 +1,7 @@
+{
+  "recovery": {
+    "max_recovery_attempts": 3,
+    "checkpoint_path": "outputs/checkpoints",
+    "recovery_timeout_ms": 5000
+  }
+}

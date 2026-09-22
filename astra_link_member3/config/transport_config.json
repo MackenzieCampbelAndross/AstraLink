@@ -1,0 +1,11 @@
+{
+  "transport": {
+    "packet_size": 4096,
+    "protocol_version": "1.0",
+    "gcm_nonce_length": 12,
+    "gcm_tag_length": 16,
+    "window_size": 32,
+    "ack_timeout_ms": 100,
+    "max_retries": 5
+  }
+}
