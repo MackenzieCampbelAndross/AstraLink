@@ -1,71 +1,108 @@
-# ASTRA LINK � Simulation Engine
+﻿# ASTRA LINK — Simulation Engine
 
-A high-performance, deterministic 3D simulation engine built in TypeScript and Three.js for the coarse alignment of mobile Free-Space Optical Communication (FSOC) terminals.
+A high-performance, deterministic 3D simulation engine built in **TypeScript** and **Three.js** for coarse alignment and beam tracking of mobile Free-Space Optical Communication (FSOC) terminals.
 
-ASTRA LINK provides a clean, reproducible simulation environment featuring two terminals:
-- **Terminal 1 (Reference Station)**: A stationary optical ground terminal with optical aperture and targeting alignment.
-- **Terminal 2 (Remote Mobile Target)**: A mobile terminal navigating 3D space with attached **Optical Beacon**, multiple parametric/stochastic motion profiles, and high-frequency ground truth telemetry generation.
+The application renders in **Camera POV Format** from the optical transceiver gimbal of a tactical patrol aircraft (**UAV 1**), executing an autonomous **5–10 second electro-optical raster search** across 3D airspace before detecting, slewing, and locking onto the optical beacon of a mobile receiver aircraft (**UAV 2**).
 
 ---
 
-## Architecture & Data Flow
+## Key Features
 
-The simulation core is strictly decoupled from the Three.js visualization pipeline. The simulation engine can run in completely headless environments (such as Node.js, Web Workers, or CI test runners) without any DOM or GPU dependencies.
+- **Transmitter Camera POV**: Primary viewport is situated directly within the optical transceiver turret of UAV 1 with an unobstructed $360^\circ$ field of regard and zero mesh clipping.
+- **FLIR / Electro-Optical Targeting HUD**:
+  - Center mil-dot optical boresight crosshairs & sensor acquisition gate
+  - Real-time 3D-to-2D screen-projected tactical tracking box mathematically centered on the target drone
+  - Heading compass ribbon ($000^\circ$–$360^\circ$)
+  - Beacon carrier signal strength (RSSI) meter
+  - Azimuth/elevation gimbal angles, target range, and pointing error (mrad)
+  - Optical zoom ($1\times$, $2\times$, $4\times$, $8\times$)
+- **Realistic Atmospheric Sky & Aerial Environment**:
+  - Three.js physical `Sky` shader with Rayleigh and Mie scattering calibrated for daylight flight
+  - Natural earth/olive terrain with subtle altitude grid lines and atmospheric haze
+  - Layered drifting cloud deck providing authentic flight speed cues
+- **Dual-UAV Aerodynamic Flight Kinematics**:
+  - Procedural tactical fixed-wing UAV models (aerodynamic fuselage, high-aspect wings with ailerons, inverted V-tail, spinning pusher propeller, optical turret pod, strobe lights)
+  - Coordinated banking physics ($\phi = -\arctan(\frac{v \cdot \dot{\psi}}{g})$) into turns
+  - UAV 1 flies a continuous reconnaissance patrol circuit at $180\text{ m}$ altitude
+  - UAV 2 flies configurable trajectories (Circle, Figure-8, Straight, Evasive Random)
+- **Authentic 5–10s Raster Search & Lock**:
+  - Gimbal performs smooth horizontal raster sweeps across the airspace
+  - Spends ~5 to 8.5 seconds sweeping sectors before intercepting the target beacon
+  - Upon acquisition, closed-loop servo controller slews camera to center the beacon into the crosshairs
+  - Snaps into `BEACON LOCKED` once error $< 0.5^\circ$ ($8.7\text{ mrad}$)
+  - High-bandwidth optical communication laser carrier beam activates
+
+---
+
+## Project Structure
 
 ```text
-               +-------------------------------------+
-               �         Simulation Config           �
-               +-------------------------------------+
-                                  �
-               +------------------?------------------+
-               �    Simulation Clock (Fixed dt)      �
-               �    Seeded Random Generator (RNG)    �
-               +-------------------------------------+
-                                  �
-               +------------------?------------------+
-               �            Motion Model             �
-               �  (Straight, Circular, Fig8, Random) �
-               +-------------------------------------+
-                                  �
-               +------------------?------------------+
-               �         Target Kinematics           �
-               �   (Position, Velocity, Accel, Yaw)  �
-               +-------------------------------------+
-                                  �
-               +------------------?------------------+
-               �          Optical Beacon             �
-               �  (Local Offset transformed to World)�
-               +-------------------------------------+
-                                  �
-               +------------------?------------------+
-               �       Ground Truth Telemetry        �
-               �  (Independent of Rendered Pixels)   �
-               +-------------------------------------+
-                                  �
-        +---------------------------------------------------+
-        �                                                   �
-+-------?--------------------------+      +-----------------?-----------------+
-�     Simulation API / State       �      �       Three.js Visualization      �
-� (Consumed by downstream modules) �      � (World, Terminals, Beacon, Trail) �
-+----------------------------------+      +-----------------------------------+
+AstraLink/
+├── .github/
+│   └── workflows/
+│       └── ci.yml             # GitHub Actions automated test & build CI
+├── config/                    # JSON scenario configs
+│   ├── default.json
+│   ├── straight.json
+│   ├── circular.json
+│   ├── figure8.json
+│   └── random.json
+├── src/
+│   ├── main.ts                # Application entrypoint & HUD event coordinator
+│   ├── simulator.ts           # Simulator runner & 3D render loop
+│   ├── types.ts               # Pure mathematical types & telemetry contracts
+│   ├── config.ts              # Configuration validator & presets
+│   ├── beacon/
+│   │   └── OpticalBeacon.ts   # Optical beacon model & 3D transform
+│   ├── entities/
+│   │   └── UAVModel.ts        # Procedural 3D aerospace UAV model
+│   ├── rendering/
+│   │   ├── SceneManager.ts    # Three.js WebGL scene, lighting, and fog
+│   │   ├── AtmosphereRenderer.ts # Physical Sky shader, terrain & clouds
+│   │   ├── CameraManager.ts   # Camera perspectives & 3D-to-2D screen projection
+│   │   ├── DualUAVRenderer.ts # Dual UAV rendering & optical laser beam
+│   │   └── DebugRenderer.ts   # Trajectory trail visualizer
+│   └── simulation/
+│       ├── SimulationEngine.ts # Master headless simulation coordinator
+│       ├── SimulationClock.ts  # Deterministic fixed-dt clock (1/30s)
+│       ├── SeededRandom.ts     # Mulberry32 PRNG (zero Math.random in physics)
+│       ├── GroundTruth.ts      # Immutable ground truth telemetry generator
+│       ├── flight/
+│       │   └── FlightKinematics.ts # Aerodynamic flight & coordinated banking
+│       ├── gimbal/
+│       │   └── GimbalController.ts # 5-10s raster search & optical lock servo
+│       └── motion/
+│           ├── MotionModel.ts
+│           ├── StraightMotion.ts
+│           ├── CircularMotion.ts
+│           ├── Figure8Motion.ts
+│           └── RandomMotion.ts
+├── tests/                     # Vitest test suite (32 tests)
+│   ├── Beacon.test.ts
+│   ├── CircularMotion.test.ts
+│   ├── Determinism.test.ts
+│   ├── Figure8Motion.test.ts
+│   ├── GimbalAndFlight.test.ts
+│   ├── RandomMotion.test.ts
+│   ├── SeededRandom.test.ts
+│   ├── SimulationClock.test.ts
+│   ├── SimulationEngine.test.ts
+│   └── StraightMotion.test.ts
+├── .editorconfig
+├── .gitattributes
+├── .gitignore
+├── index.html
+├── LICENSE
+├── package.json
+├── tsconfig.json
+└── vite.config.ts
 ```
-
-### Deterministic Update Sequence
-
-Every simulation step executes in a deterministic order:
-1. **Advance Simulation Clock**: Fixed $\Delta t$ increment ($t = \text{frameId} \times \Delta t$).
-2. **Update Target Motion**: Step analytical or integrated motion equations.
-3. **Update Target Position & Velocity**: Bounded by world dimensions and reflection boundaries.
-4. **Update Target Orientation**: Velocity-aligned heading vectors.
-5. **Update Beacon World Position**: Target position rotated by target orientation + local offset.
-6. **Generate Ground Truth**: Produces an immutable telemetry record for evaluation.
-7. **Update Visualization**: Visual objects mirror simulation state without altering physics.
 
 ---
 
-## Installation
+## Installation & Setup
 
-Ensure [Node.js](https://nodejs.org/) (v18+) is installed.
+Ensure **Node.js** (v18+) is installed.
 
 ```bash
 npm install
@@ -73,9 +110,9 @@ npm install
 
 ---
 
-## Development
+## Development Server
 
-To start the Vite development server with hot module reloading:
+Launch the Vite local dev server with hot module replacement:
 
 ```bash
 npm run dev
@@ -85,15 +122,15 @@ Open `http://localhost:5173/` in your browser.
 
 ---
 
-## Testing
+## Automated Testing
 
-Run the Vitest test suite covering the simulation clock, seeded RNG, analytical motion models, beacon kinematics, and 300-frame bit-exact determinism:
+Execute all 32 unit and determinism test suites using Vitest:
 
 ```bash
 npm test
 ```
 
-To run tests in watch mode:
+To run tests in interactive watch mode:
 
 ```bash
 npm run test:watch
@@ -103,7 +140,7 @@ npm run test:watch
 
 ## Production Build
 
-To verify TypeScript types and bundle the application:
+Compile TypeScript and build the optimized production assets:
 
 ```bash
 npm run build
@@ -111,126 +148,37 @@ npm run build
 
 ---
 
-## Supported Motion Models
+## Interactive Controls & Shortcuts
 
-| Motion Model | Description | Kinematic Formulation |
+| Action | Shortcut | Description |
 | :--- | :--- | :--- |
-| **Straight** | Uniform linear motion with world boundary bounce/clamp | $\mathbf{r}(t) = \mathbf{r}_0 + \mathbf{v} \cdot t$ |
-| **Circular** | Smooth orbital movement in 3D planes (XZ, XY, YZ) | $x = C_x + R\cos(\omega t + \phi)$, $z = C_z + R\sin(\omega t + \phi)$, centripetal $\mathbf{a} = -\omega^2 (\mathbf{r} - \mathbf{C})$ |
-| **Figure-8** | Continuous Lissajous / Lemniscate parametric curve | $x = C_x + A_x\sin(\omega t)$, $z = C_z + A_z\sin(2\omega t)$ |
-| **Random** | Smooth stochastic random walk without teleportation | Integrated Gaussian acceleration with damping, velocity limits, and world boundary bouncing |
+| **Play / Pause** | `Space` | Toggles simulation progression |
+| **Step** | `S` | Advances simulation by one fixed timestep $\Delta t$ |
+| **Reset** | `R` | Resets simulation and flight clocks to $t = 0$ |
+| **Break Lock** | `B` | Breaks active lock and initiates a new 5–10s search |
+| **Instant Lock** | `L` | Operator override to instantly lock target beacon |
+| **Camera POV** | Button | Transmitter optical gimbal camera view (Default) |
+| **Chase Cams** | Buttons | Exterior third-person chase cameras behind UAV 1 or UAV 2 |
+| **Tactical Free**| Button | Free orbit camera inspecting the airspace |
+| **Optical Zoom** | Buttons | Modulates optical lens FOV ($1\times, 2\times, 4\times, 8\times$) |
 
 ---
 
-## Configuration
+## Scope & Architectural Boundary
 
-The simulation is fully configurable via JSON files located in `config/`:
-- `config/default.json`
-- `config/straight.json`
-- `config/circular.json`
-- `config/figure8.json`
-- `config/random.json`
+In accordance with the ASTRA LINK specification, this module implements **ONLY THE SIMULATION FOUNDATION**:
+- Virtual flight environment, UAV kinematics, and optical beacon
+- Camera POV and electro-optical search and lock servo kinematics
+- Ground truth telemetry and deterministic clock
 
-### Example Configuration:
-
-```json
-{
-  "seed": 42,
-  "simulation": {
-    "duration_s": 30,
-    "dt": 0.0333333333
-  },
-  "world": {
-    "width": 2000,
-    "height": 1000,
-    "depth": 2000,
-    "boundary_behavior": "bounce"
-  },
-  "terminals": {
-    "terminal1": {
-      "position": { "x": 0, "y": 0, "z": 0 }
-    },
-    "terminal2": {
-      "position": { "x": 300, "y": 50, "z": -300 }
-    }
-  },
-  "target": {
-    "motion": "circular",
-    "size": { "x": 2, "y": 2, "z": 2 },
-    "circular": {
-      "center": { "x": 0, "y": 50, "z": -300 },
-      "radius": 300,
-      "angular_velocity": 0.4,
-      "plane": "XZ",
-      "initial_phase": 0
-    }
-  },
-  "beacon": {
-    "enabled": true,
-    "brightness": 1.0,
-    "size": 4,
-    "localPosition": { "x": 0, "y": 1.2, "z": 0 }
-  },
-  "visualization": {
-    "showTrajectory": true,
-    "trajectoryLength": 600
-  }
-}
-```
-
-Configuration is validated prior to simulation initialization. Clear errors are thrown for non-positive timesteps, negative radii, or missing coordinates.
+This module **DOES NOT** implement and explicitly excludes:
+- Neural network detectors (YOLO / Heatmap CNN)
+- Kalman filter tracking estimators
+- Cryptographic authentication and key exchange
+- Downstream network communications, ARQ, and data streaming
 
 ---
 
-## Seeded Determinism
+## License
 
-The simulation guarantees bit-exact repeatability:
-- All stochastic behaviors utilize `SeededRandom` (Mulberry32).
-- Zero calls to `Math.random()` in the simulation engine.
-- A simulation initialized with `seed = 42` produces the exact same trajectory, velocity, beacon position, and ground truth across repeated runs.
-- Tested and verified in `tests/Determinism.test.ts`.
-
----
-
-## Public Simulation API
-
-The engine exposes a clean, typed interface (`SimulationAPI`):
-
-```typescript
-import { SimulationEngine } from "./src/simulation/SimulationEngine";
-import { DEFAULT_CONFIG } from "./src/config";
-
-const engine = new SimulationEngine(DEFAULT_CONFIG);
-
-// Advance by one fixed timestep dt
-engine.step();
-
-// Access ground truth telemetry (never derived from pixels)
-const gt = engine.getGroundTruth();
-console.log(`Time: ${gt.timestamp}s, Target: (${gt.targetPosition.x}, ${gt.targetPosition.y}, ${gt.targetPosition.z})`);
-console.log(`Beacon: (${gt.beaconPosition.x}, ${gt.beaconPosition.y}, ${gt.beaconPosition.z})`);
-
-// Switch motion dynamically
-engine.switchMotion("figure8");
-
-// Reset back to t = 0
-engine.reset();
-```
-
----
-
-## Scope & Module Boundaries
-
-In adherence to the ASTRA LINK modular specification, this repository implements **ONLY THE SIMULATION PART**.
-
-This module **DOES NOT** implement and intentionally excludes:
-- Optical beacon vision detector / CNN / YOLO / Heatmaps
-- Kalman filters or tracking estimators
-- PID controllers or gimbal servo controllers
-- Authentication protocols or key exchange
-- Cryptographic ciphers
-- Network communication protocols, ARQ, or ACK loops
-- Link failure reacquisition logic
-- Downstream AI models
-
-Downstream modules consume the 3D scene via virtual camera capture or consume ground truth telemetry for tracking benchmark evaluation.
+This project is licensed under the [MIT License](LICENSE).
