@@ -1,0 +1,23 @@
+{
+  "name": "astra-link-simulation",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Simulation Engine for coarse alignment of Free-Space Optical Communication (FSOC) terminals",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "three": "^0.170.0"
+  },
+  "devDependencies": {
+    "@types/three": "^0.170.0",
+    "typescript": "^5.6.3",
+    "vite": "^6.0.1",
+    "vitest": "^2.1.8"
+  }
+}

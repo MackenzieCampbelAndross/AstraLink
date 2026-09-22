@@ -1,0 +1,42 @@
+{
+  "seed": 42,
+  "simulation": {
+    "duration_s": 30,
+    "dt": 0.0333333333
+  },
+  "world": {
+    "width": 2000,
+    "height": 1000,
+    "depth": 2000,
+    "boundary_behavior": "bounce"
+  },
+  "terminals": {
+    "terminal1": {
+      "position": { "x": 0, "y": 0, "z": 0 }
+    },
+    "terminal2": {
+      "position": { "x": 300, "y": 50, "z": -300 }
+    }
+  },
+  "target": {
+    "motion": "circular",
+    "size": { "x": 2, "y": 2, "z": 2 },
+    "circular": {
+      "center": { "x": 0, "y": 50, "z": -300 },
+      "radius": 350,
+      "angular_velocity": 0.5,
+      "plane": "XZ",
+      "initial_phase": 0
+    }
+  },
+  "beacon": {
+    "enabled": true,
+    "brightness": 1.0,
+    "size": 4,
+    "localPosition": { "x": 0, "y": 1.2, "z": 0 }
+  },
+  "visualization": {
+    "showTrajectory": true,
+    "trajectoryLength": 600
+  }
+}
